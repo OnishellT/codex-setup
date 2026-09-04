@@ -1,0 +1,1466 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "cli_version": "0.153.0",
+    "binary_sha256": "fce635028842bfe9257140e8b7d53162732945e2f356fc35225be0702b4974be",
+    "binary_path": "@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex",
+    "extracted_on": "2026-09-03",
+    "table_offset": 217601965,
+    "table_bytes": 62593,
+    "table_sha256": "be28f0c1a167469c5bd1e5311d4d3503e6503b378791f2afb9e3e5f2f7f4642e",
+    "theme_count": 32,
+    "format": "32-entry little-endian bincode name -> zlib-compressed Syntect 5.3.0 Theme map",
+    "verification": "All option tags, lengths, UTF-8, zlib stream boundaries and complete decoded records checked; exact binary SHA-256 required.",
+    "picker_ids": "Explicit 32-variant mapping; kebab-case IDs occur in the binary theme parser at 0xa4dd830 (including immediate string comparisons). Display-name aliases are additionally accepted by this adapter, case-insensitively.",
+    "color_policy": "Exact raw RGBA retained. Opaque RGB unchanged; translucent colors composited against theme background using integer round-to-nearest. No background means terminal default. ANSI/index references are not invented RGB; they are retained separately.",
+    "scope_policy": "Representative single positive scope rules, most specific then latest. If none match target alternatives, use the theme foreground. This is a panel-role mapping, not a full syntax highlighter or CLI chrome palette.",
+    "documentation": "https://learn.chatgpt.com/docs/cli-customization"
+  },
+  "role_scope_preferences": {
+    "accent": [
+      "constant.numeric",
+      "constant.language",
+      "keyword",
+      "entity.name.function"
+    ],
+    "muted": [
+      "comment"
+    ],
+    "success": [
+      "markup.inserted",
+      "diff.inserted",
+      "entity.name.function"
+    ],
+    "warning": [
+      "markup.changed",
+      "diff.changed",
+      "string"
+    ]
+  },
+  "palettes": {
+    "1337": {
+      "display_name": "1337",
+      "aliases": [
+        "1337"
+      ],
+      "colors": {
+        "fg": "#f8f8f2",
+        "bg": "#191919",
+        "accent": "#fdb082",
+        "muted": "#6d6d6d",
+        "success": "#a6e22e",
+        "selection": "#515151",
+        "warning": "#cc00ff"
+      },
+      "raw_rgba": {
+        "fg": "#f8f8f2ff",
+        "bg": "#191919ff",
+        "accent": "#fdb082ff",
+        "muted": "#6d6d6dff",
+        "success": "#a6e22eff",
+        "selection": "#515151ff",
+        "warning": "#cc00ffff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[2].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[46].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[47].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "1337",
+        "author": "Mark Herpich",
+        "payload_offset": 217601993,
+        "compressed_bytes": 957,
+        "decoded_bytes": 4282,
+        "decoded_sha256": "241ee2ad1069e27629cdc9c1233e35710f2906f0e8148284415336d1e7340a7c",
+        "scope_rule_count": 48
+      }
+    },
+    "ansi": {
+      "display_name": "ansi",
+      "aliases": [
+        "ansi"
+      ],
+      "colors": {
+        "fg": null,
+        "bg": null,
+        "accent": null,
+        "muted": null,
+        "success": null,
+        "selection": null,
+        "warning": null
+      },
+      "raw_rgba": {
+        "fg": "#00000001",
+        "bg": "#00000001",
+        "accent": "#03000000",
+        "muted": "#02000000",
+        "success": "#02000000",
+        "selection": null,
+        "warning": "#05000000"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[9].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[26].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[28].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {
+        "fg": "default",
+        "bg": "default",
+        "accent": 3,
+        "muted": 2,
+        "success": 2,
+        "warning": 5
+      },
+      "evidence": {
+        "theme_name": "ANSI",
+        "author": "Template: Chris Kempson, Scheme: Mitchell Kember",
+        "payload_offset": 217648994,
+        "compressed_bytes": 735,
+        "decoded_bytes": 3395,
+        "decoded_sha256": "4e5286754e3660baadaaf13aacb2cab7a51af1a370f301539159b305da83e8a5",
+        "scope_rule_count": 35
+      }
+    },
+    "base16": {
+      "display_name": "base16",
+      "aliases": [
+        "base16"
+      ],
+      "colors": {
+        "fg": null,
+        "bg": null,
+        "accent": null,
+        "muted": null,
+        "success": null,
+        "selection": null,
+        "warning": null
+      },
+      "raw_rgba": {
+        "fg": "#07000000",
+        "bg": "#00000000",
+        "accent": "#09000000",
+        "muted": "#08000000",
+        "success": "#02000000",
+        "selection": "#0b000000",
+        "warning": "#05000000"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[15].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[1].foreground (comment; target=comment)",
+        "success": "scopes[33].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[35].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {
+        "fg": 7,
+        "bg": 0,
+        "selection": 11,
+        "accent": 9,
+        "muted": 8,
+        "success": 2,
+        "warning": 5
+      },
+      "evidence": {
+        "theme_name": "Base16",
+        "author": "Template: Chris Kempson, Scheme: Mitchell Kember",
+        "payload_offset": 217649751,
+        "compressed_bytes": 836,
+        "decoded_bytes": 4183,
+        "decoded_sha256": "b7f3df328f6da93cfe3f0d414a5c638d13cc281950bd415324c951723390fa0d",
+        "scope_rule_count": 44
+      }
+    },
+    "base16-256": {
+      "display_name": "base16-256",
+      "aliases": [
+        "base16-256"
+      ],
+      "colors": {
+        "fg": null,
+        "bg": null,
+        "accent": null,
+        "muted": null,
+        "success": null,
+        "selection": null,
+        "warning": null
+      },
+      "raw_rgba": {
+        "fg": "#07000000",
+        "bg": "#00000000",
+        "accent": "#10000000",
+        "muted": "#08000000",
+        "success": "#02000000",
+        "selection": "#13000000",
+        "warning": "#05000000"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[15].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[1].foreground (comment; target=comment)",
+        "success": "scopes[33].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[35].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {
+        "fg": 7,
+        "bg": 0,
+        "selection": 19,
+        "accent": 16,
+        "muted": 8,
+        "success": 2,
+        "warning": 5
+      },
+      "evidence": {
+        "theme_name": "Base16 256",
+        "author": "Template: Chris Kempson, Scheme: Mitchell Kember",
+        "payload_offset": 217650613,
+        "compressed_bytes": 841,
+        "decoded_bytes": 4187,
+        "decoded_sha256": "65e0f1dd187549d5fe0779bf7067cf85ea5ce3f94c55fb981384cac25ca659c3",
+        "scope_rule_count": 44
+      }
+    },
+    "base16-eighties-dark": {
+      "display_name": "base16-eighties.dark",
+      "aliases": [
+        "base16-eighties-dark",
+        "base16-eighties.dark"
+      ],
+      "colors": {
+        "fg": "#d3d0c8",
+        "bg": "#2d2d2d",
+        "accent": "#f99157",
+        "muted": "#747369",
+        "success": "#99cc99",
+        "selection": "#515151",
+        "warning": "#cc99cc"
+      },
+      "raw_rgba": {
+        "fg": "#d3d0c8ff",
+        "bg": "#2d2d2dff",
+        "accent": "#f99157ff",
+        "muted": "#747369ff",
+        "success": "#99cc99ff",
+        "selection": "#515151ff",
+        "warning": "#cc99ccff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[14].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[1].foreground (comment; target=comment)",
+        "success": "scopes[34].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[36].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Base16 Eighties Dark",
+        "author": "Chris Kempson (http://chriskempson.com)",
+        "payload_offset": 217651490,
+        "compressed_bytes": 936,
+        "decoded_bytes": 4629,
+        "decoded_sha256": "69c2809728429815a3ee129b0c5af433f2372273b7fce0fddc727e9e66262ab7",
+        "scope_rule_count": 49
+      }
+    },
+    "base16-mocha-dark": {
+      "display_name": "base16-mocha.dark",
+      "aliases": [
+        "base16-mocha-dark",
+        "base16-mocha.dark"
+      ],
+      "colors": {
+        "fg": "#d0c8c6",
+        "bg": "#3b3228",
+        "accent": "#d28b71",
+        "muted": "#7e705a",
+        "success": "#beb55b",
+        "selection": "#645240",
+        "warning": "#a89bb9"
+      },
+      "raw_rgba": {
+        "fg": "#d0c8c6ff",
+        "bg": "#3b3228ff",
+        "accent": "#d28b71ff",
+        "muted": "#7e705aff",
+        "success": "#beb55bff",
+        "selection": "#645240ff",
+        "warning": "#a89bb9ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[14].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[1].foreground (comment; target=comment)",
+        "success": "scopes[34].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[36].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Base16 Mocha Dark",
+        "author": "Chris Kempson (http://chriskempson.com)",
+        "payload_offset": 217652459,
+        "compressed_bytes": 911,
+        "decoded_bytes": 4214,
+        "decoded_sha256": "36b2fc1f01a138c12408363204b761a81c4d6c9d761120f32ac3f573959ac16f",
+        "scope_rule_count": 47
+      }
+    },
+    "base16-ocean-dark": {
+      "display_name": "base16-ocean.dark",
+      "aliases": [
+        "base16-ocean-dark",
+        "base16-ocean.dark"
+      ],
+      "colors": {
+        "fg": "#c0c5ce",
+        "bg": "#2b303b",
+        "accent": "#d08770",
+        "muted": "#65737e",
+        "success": "#a3be8c",
+        "selection": "#4f5b66",
+        "warning": "#b48ead"
+      },
+      "raw_rgba": {
+        "fg": "#c0c5ceff",
+        "bg": "#2b303bff",
+        "accent": "#d08770ff",
+        "muted": "#65737eff",
+        "success": "#a3be8cff",
+        "selection": "#4f5b66ff",
+        "warning": "#b48eadff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[14].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[1].foreground (comment; target=comment)",
+        "success": "scopes[34].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[36].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Base16 Ocean Dark",
+        "author": "Chris Kempson (http://chriskempson.com)",
+        "payload_offset": 217653403,
+        "compressed_bytes": 961,
+        "decoded_bytes": 4638,
+        "decoded_sha256": "dd0a8f4542056f03be9ac69a0a49946a5740232f4483712b2ad52f4ce0dbd17b",
+        "scope_rule_count": 49
+      }
+    },
+    "base16-ocean-light": {
+      "display_name": "base16-ocean.light",
+      "aliases": [
+        "base16-ocean-light",
+        "base16-ocean.light"
+      ],
+      "colors": {
+        "fg": "#4f5b66",
+        "bg": "#eff1f5",
+        "accent": "#d08770",
+        "muted": "#a7adba",
+        "success": "#a3be8c",
+        "selection": "#dfe1e8",
+        "warning": "#b48ead"
+      },
+      "raw_rgba": {
+        "fg": "#4f5b66ff",
+        "bg": "#eff1f5ff",
+        "accent": "#d08770ff",
+        "muted": "#a7adbaff",
+        "success": "#a3be8cff",
+        "selection": "#dfe1e8ff",
+        "warning": "#b48eadff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[14].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[1].foreground (comment; target=comment)",
+        "success": "scopes[34].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[36].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Base16 Ocean Light",
+        "author": "Chris Kempson (http://chriskempson.com)",
+        "payload_offset": 217654398,
+        "compressed_bytes": 946,
+        "decoded_bytes": 4631,
+        "decoded_sha256": "0c8da0b64953141c844536c6f20428e20037508ca91314e411d1e7f42e066bcb",
+        "scope_rule_count": 49
+      }
+    },
+    "catppuccin-frappe": {
+      "display_name": "Catppuccin Frappe",
+      "aliases": [
+        "catppuccin-frappe",
+        "Catppuccin Frappe"
+      ],
+      "colors": {
+        "fg": "#c6d0f5",
+        "bg": "#303446",
+        "accent": "#ef9f76",
+        "muted": "#949cbb",
+        "success": "#8caaee",
+        "selection": "#494e63",
+        "warning": "#a6d189"
+      },
+      "raw_rgba": {
+        "fg": "#c6d0f5ff",
+        "bg": "#303446ff",
+        "accent": "#ef9f76ff",
+        "muted": "#949cbbff",
+        "success": "#8caaeeff",
+        "selection": "#949cbb40",
+        "warning": "#a6d189ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[5].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[2].foreground (comment; target=comment)",
+        "success": "scopes[9].foreground (entity.name.function; target=entity.name.function)",
+        "selection": "settings.selection",
+        "warning": "scopes[3].foreground (string; target=string)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Catppuccin Frappé",
+        "author": "Catppuccin Org",
+        "payload_offset": 217602983,
+        "compressed_bytes": 4332,
+        "decoded_bytes": 28422,
+        "decoded_sha256": "70595dd19194fe47841217d2783eae93290982f1dfdfc3f11d666653027327a0",
+        "scope_rule_count": 185
+      }
+    },
+    "catppuccin-latte": {
+      "display_name": "Catppuccin Latte",
+      "aliases": [
+        "catppuccin-latte",
+        "Catppuccin Latte"
+      ],
+      "colors": {
+        "fg": "#4c4f69",
+        "bg": "#eff1f5",
+        "accent": "#fe640b",
+        "muted": "#7c7f93",
+        "success": "#1e66f5",
+        "selection": "#cccfd7",
+        "warning": "#40a02b"
+      },
+      "raw_rgba": {
+        "fg": "#4c4f69ff",
+        "bg": "#eff1f5ff",
+        "accent": "#fe640bff",
+        "muted": "#7c7f93ff",
+        "success": "#1e66f5ff",
+        "selection": "#7c7f934d",
+        "warning": "#40a02bff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[5].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[2].foreground (comment; target=comment)",
+        "success": "scopes[9].foreground (entity.name.function; target=entity.name.function)",
+        "selection": "settings.selection",
+        "warning": "scopes[3].foreground (string; target=string)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Catppuccin Latte",
+        "author": "Catppuccin Org",
+        "payload_offset": 217607347,
+        "compressed_bytes": 4327,
+        "decoded_bytes": 28420,
+        "decoded_sha256": "4c7dddaae66120875b5cbd367239379bb2964f09c932bccd28c05d10bce7cc2b",
+        "scope_rule_count": 185
+      }
+    },
+    "catppuccin-macchiato": {
+      "display_name": "Catppuccin Macchiato",
+      "aliases": [
+        "catppuccin-macchiato",
+        "Catppuccin Macchiato"
+      ],
+      "colors": {
+        "fg": "#cad3f5",
+        "bg": "#24273a",
+        "accent": "#f5a97f",
+        "muted": "#939ab7",
+        "success": "#8aadf4",
+        "selection": "#404459",
+        "warning": "#a6da95"
+      },
+      "raw_rgba": {
+        "fg": "#cad3f5ff",
+        "bg": "#24273aff",
+        "accent": "#f5a97fff",
+        "muted": "#939ab7ff",
+        "success": "#8aadf4ff",
+        "selection": "#939ab740",
+        "warning": "#a6da95ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[5].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[2].foreground (comment; target=comment)",
+        "success": "scopes[9].foreground (entity.name.function; target=entity.name.function)",
+        "selection": "settings.selection",
+        "warning": "scopes[3].foreground (string; target=string)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Catppuccin Macchiato",
+        "author": "Catppuccin Org",
+        "payload_offset": 217611710,
+        "compressed_bytes": 4337,
+        "decoded_bytes": 28424,
+        "decoded_sha256": "839113ca83b1dbfb1ff4d016dfc5671163126827014da0d62ee20977870795d9",
+        "scope_rule_count": 185
+      }
+    },
+    "catppuccin-mocha": {
+      "display_name": "Catppuccin Mocha",
+      "aliases": [
+        "catppuccin-mocha",
+        "Catppuccin Mocha"
+      ],
+      "colors": {
+        "fg": "#cdd6f4",
+        "bg": "#1e1e2e",
+        "accent": "#fab387",
+        "muted": "#9399b2",
+        "success": "#89b4fa",
+        "selection": "#3b3d4f",
+        "warning": "#a6e3a1"
+      },
+      "raw_rgba": {
+        "fg": "#cdd6f4ff",
+        "bg": "#1e1e2eff",
+        "accent": "#fab387ff",
+        "muted": "#9399b2ff",
+        "success": "#89b4faff",
+        "selection": "#9399b240",
+        "warning": "#a6e3a1ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[5].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[2].foreground (comment; target=comment)",
+        "success": "scopes[9].foreground (entity.name.function; target=entity.name.function)",
+        "selection": "settings.selection",
+        "warning": "scopes[3].foreground (string; target=string)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Catppuccin Mocha",
+        "author": "Catppuccin Org",
+        "payload_offset": 217616079,
+        "compressed_bytes": 4332,
+        "decoded_bytes": 28420,
+        "decoded_sha256": "d0726566e7bd8e39a93de04533b47cc1e6c91dcb6107b812f7da9db09d8fdf96",
+        "scope_rule_count": 185
+      }
+    },
+    "coldark-cold": {
+      "display_name": "Coldark-Cold",
+      "aliases": [
+        "coldark-cold",
+        "Coldark-Cold"
+      ],
+      "colors": {
+        "fg": "#111b27",
+        "bg": "#e3eaf2",
+        "accent": "#755f00",
+        "muted": "#3c526d",
+        "success": "#116b00",
+        "selection": "#d0dae7",
+        "warning": "#755f00"
+      },
+      "raw_rgba": {
+        "fg": "#111b27ff",
+        "bg": "#e3eaf2ff",
+        "accent": "#755f00ff",
+        "muted": "#3c526dff",
+        "success": "#116b00ff",
+        "selection": "#d0dae7ff",
+        "warning": "#755f00ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[6].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[2].foreground (comment; target=comment)",
+        "success": "scopes[33].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[28].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Coldark-Cold",
+        "author": "Armand Philippot",
+        "payload_offset": 217620439,
+        "compressed_bytes": 1348,
+        "decoded_bytes": 7606,
+        "decoded_sha256": "83b05d6bc4d2e6feed52414cb6d00ea82e6914d763ddd0e0ad306c1c43787873",
+        "scope_rule_count": 85
+      }
+    },
+    "coldark-dark": {
+      "display_name": "Coldark-Dark",
+      "aliases": [
+        "coldark-dark",
+        "Coldark-Dark"
+      ],
+      "colors": {
+        "fg": "#e3eaf2",
+        "bg": "#111b27",
+        "accent": "#e6d37a",
+        "muted": "#8da1b9",
+        "success": "#91d076",
+        "selection": "#213043",
+        "warning": "#e6d37a"
+      },
+      "raw_rgba": {
+        "fg": "#e3eaf2ff",
+        "bg": "#111b27ff",
+        "accent": "#e6d37aff",
+        "muted": "#8da1b9ff",
+        "success": "#91d076ff",
+        "selection": "#213043ff",
+        "warning": "#e6d37aff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[6].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[2].foreground (comment; target=comment)",
+        "success": "scopes[33].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[28].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Coldark-Dark",
+        "author": "Armand Philippot",
+        "payload_offset": 217621815,
+        "compressed_bytes": 1362,
+        "decoded_bytes": 7606,
+        "decoded_sha256": "62d7a34b3dca501982dd9e36eb287aabab382abed89c1e4429e00fc053e18cb2",
+        "scope_rule_count": 85
+      }
+    },
+    "dark-neon": {
+      "display_name": "DarkNeon",
+      "aliases": [
+        "dark-neon",
+        "DarkNeon"
+      ],
+      "colors": {
+        "fg": "#ffffff",
+        "bg": "#000000",
+        "accent": "#ff73fd",
+        "muted": "#7c7c7c",
+        "success": "#f8f8f8",
+        "selection": "#333333",
+        "warning": "#f8f8f8"
+      },
+      "raw_rgba": {
+        "fg": "#ffffffff",
+        "bg": "#000000ff",
+        "accent": "#ff73fdff",
+        "muted": "#7c7c7cff",
+        "success": "#f8f8f8ff",
+        "selection": "#333333ff",
+        "warning": "#f8f8f8ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[11].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[48].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[47].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Dark Neon",
+        "author": null,
+        "payload_offset": 217623201,
+        "compressed_bytes": 1235,
+        "decoded_bytes": 5416,
+        "decoded_sha256": "2f34fd4e24f440e500b124a4e13be15a8443249ec42b8d50f715136436761ed7",
+        "scope_rule_count": 59
+      }
+    },
+    "dracula": {
+      "display_name": "Dracula",
+      "aliases": [
+        "dracula",
+        "Dracula"
+      ],
+      "colors": {
+        "fg": "#f8f8f2",
+        "bg": "#282a36",
+        "accent": "#bd93f9",
+        "muted": "#6272a4",
+        "success": "#50fa7b",
+        "selection": "#44475a",
+        "warning": "#e6db74"
+      },
+      "raw_rgba": {
+        "fg": "#f8f8f2ff",
+        "bg": "#282a36ff",
+        "accent": "#bd93f9ff",
+        "muted": "#6272a4ff",
+        "success": "#50fa7bff",
+        "selection": "#44475aff",
+        "warning": "#e6db74ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[2].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[31].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[32].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Dracula",
+        "author": "Zeno Rocha",
+        "payload_offset": 217624459,
+        "compressed_bytes": 1254,
+        "decoded_bytes": 6407,
+        "decoded_sha256": "8ea6ddcc6a1db432942c245ac30ee4bcce0794f8c65d9af7c3e365b210138d98",
+        "scope_rule_count": 74
+      }
+    },
+    "github": {
+      "display_name": "GitHub",
+      "aliases": [
+        "github",
+        "GitHub"
+      ],
+      "colors": {
+        "fg": "#333333",
+        "bg": "#ffffff",
+        "accent": "#0086b3",
+        "muted": "#969896",
+        "success": "#003300",
+        "selection": "#b0cde7",
+        "warning": "#ececec"
+      },
+      "raw_rgba": {
+        "fg": "#333333ff",
+        "bg": "#ffffffff",
+        "accent": "#0086b3ff",
+        "muted": "#969896ff",
+        "success": "#003300ff",
+        "selection": "#b0cde7ff",
+        "warning": "#ecececff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[15].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[38].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[39].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "GitHub",
+        "author": null,
+        "payload_offset": 217625735,
+        "compressed_bytes": 854,
+        "decoded_bytes": 3950,
+        "decoded_sha256": "ac17d60a943638e7e716f9e1567e721ffce499f0f453ecb5ba4efb2bb8596b25",
+        "scope_rule_count": 40
+      }
+    },
+    "gruvbox-dark": {
+      "display_name": "gruvbox-dark",
+      "aliases": [
+        "gruvbox-dark"
+      ],
+      "colors": {
+        "fg": "#8a826d",
+        "bg": "#282828",
+        "accent": "#d3869b",
+        "muted": "#928374",
+        "success": "#b8bb26",
+        "selection": "#3c3836",
+        "warning": "#fabd2f"
+      },
+      "raw_rgba": {
+        "fg": "#ebdbb280",
+        "bg": "#282828ff",
+        "accent": "#d3869bff",
+        "muted": "#928374ff",
+        "success": "#b8bb26ff",
+        "selection": "#3c3836ff",
+        "warning": "#fabd2fff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[21].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[2].foreground (comment; target=comment)",
+        "success": "scopes[92].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[93].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "gruvbox (Dark) (Medium)",
+        "author": "Brian Reilly (https://github.com/Briles/gruvbox)",
+        "payload_offset": 217655372,
+        "compressed_bytes": 3878,
+        "decoded_bytes": 22114,
+        "decoded_sha256": "b6d452cedbd31fcdd63aa1e74d45b8b9004e15a8e43e78056f2d2dd495bfb042",
+        "scope_rule_count": 126
+      }
+    },
+    "gruvbox-light": {
+      "display_name": "gruvbox-light",
+      "aliases": [
+        "gruvbox-light"
+      ],
+      "colors": {
+        "fg": "#9b947e",
+        "bg": "#fbf1c7",
+        "accent": "#8f3f71",
+        "muted": "#928374",
+        "success": "#79740e",
+        "selection": "#ebdbb2",
+        "warning": "#b57614"
+      },
+      "raw_rgba": {
+        "fg": "#3c383680",
+        "bg": "#fbf1c7ff",
+        "accent": "#8f3f71ff",
+        "muted": "#928374ff",
+        "success": "#79740eff",
+        "selection": "#ebdbb2ff",
+        "warning": "#b57614ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[21].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[2].foreground (comment; target=comment)",
+        "success": "scopes[92].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[93].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "gruvbox (Light) (Medium)",
+        "author": "Brian Reilly (https://github.com/Briles/gruvbox)",
+        "payload_offset": 217659279,
+        "compressed_bytes": 3878,
+        "decoded_bytes": 22115,
+        "decoded_sha256": "15a0fa370e7de211174810e6787ef071d31245a39e7a61efde70351be2441366",
+        "scope_rule_count": 126
+      }
+    },
+    "inspired-github": {
+      "display_name": "InspiredGitHub",
+      "aliases": [
+        "inspired-github",
+        "InspiredGitHub"
+      ],
+      "colors": {
+        "fg": "#323232",
+        "bg": "#ffffff",
+        "accent": "#0086b3",
+        "muted": "#969896",
+        "success": "#795da3",
+        "selection": "#f8eec7",
+        "warning": "#183691"
+      },
+      "raw_rgba": {
+        "fg": "#323232ff",
+        "bg": "#ffffffff",
+        "accent": "#0086b3ff",
+        "muted": "#969896ff",
+        "success": "#795da3ff",
+        "selection": "#f8eec7ff",
+        "warning": "#183691ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[4].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[14].foreground (entity.name.function; target=entity.name.function)",
+        "selection": "settings.selection",
+        "warning": "scopes[1].foreground (string; target=string)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "GitHub",
+        "author": null,
+        "payload_offset": 217626619,
+        "compressed_bytes": 1599,
+        "decoded_bytes": 17576,
+        "decoded_sha256": "1b10399789be89ba760cafdc860e2d1e5f83652e81d17514e6d0f3c128844807",
+        "scope_rule_count": 116
+      }
+    },
+    "monokai-extended": {
+      "display_name": "Monokai Extended",
+      "aliases": [
+        "monokai-extended",
+        "Monokai Extended"
+      ],
+      "colors": {
+        "fg": "#f8f8f2",
+        "bg": "#222222",
+        "accent": "#be84ff",
+        "muted": "#75715e",
+        "success": "#a6e22e",
+        "selection": "#444444",
+        "warning": "#e6db74"
+      },
+      "raw_rgba": {
+        "fg": "#f8f8f2ff",
+        "bg": "#222222ff",
+        "accent": "#be84ffff",
+        "muted": "#75715eff",
+        "success": "#a6e22eff",
+        "selection": "#444444ff",
+        "warning": "#e6db74ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[2].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[86].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[87].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Monokai Extended",
+        "author": "github.com/jonschlinkert",
+        "payload_offset": 217628250,
+        "compressed_bytes": 2941,
+        "decoded_bytes": 16508,
+        "decoded_sha256": "1de1d23fbeb15bf3f6fba0997999b7401bcb9c6aaf3ddeb879f31ba44e638f67",
+        "scope_rule_count": 152
+      }
+    },
+    "monokai-extended-bright": {
+      "display_name": "Monokai Extended Bright",
+      "aliases": [
+        "monokai-extended-bright",
+        "Monokai Extended Bright"
+      ],
+      "colors": {
+        "fg": "#f8f8f2",
+        "bg": "#272822",
+        "accent": "#ae81ff",
+        "muted": "#75715e",
+        "success": "#a6e22e",
+        "selection": "#9d550f",
+        "warning": "#e6db74"
+      },
+      "raw_rgba": {
+        "fg": "#f8f8f2ff",
+        "bg": "#272822ff",
+        "accent": "#ae81ffff",
+        "muted": "#75715eff",
+        "success": "#a6e22eff",
+        "selection": "#9d550fff",
+        "warning": "#e6db74ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[2].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[43].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[44].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Monokai Extended Bright",
+        "author": "@tapionlinna",
+        "payload_offset": 217631230,
+        "compressed_bytes": 1528,
+        "decoded_bytes": 7171,
+        "decoded_sha256": "f7975263fc558cbccf30bbcb97ad6632bd1bcb9635c1323794b731b99c71ec3d",
+        "scope_rule_count": 79
+      }
+    },
+    "monokai-extended-light": {
+      "display_name": "Monokai Extended Light",
+      "aliases": [
+        "monokai-extended-light",
+        "Monokai Extended Light"
+      ],
+      "colors": {
+        "fg": "#49483e",
+        "bg": "#fafafa",
+        "accent": "#684d99",
+        "muted": "#75715e",
+        "success": "#679c00",
+        "selection": "#ccc9ad",
+        "warning": "#998f2f"
+      },
+      "raw_rgba": {
+        "fg": "#49483eff",
+        "bg": "#fafafaff",
+        "accent": "#684d99ff",
+        "muted": "#75715eff",
+        "success": "#679c00ff",
+        "selection": "#ccc9adff",
+        "warning": "#998f2fff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[2].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[76].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[77].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Monokai Extended Light",
+        "author": "github.com/szupie",
+        "payload_offset": 217632796,
+        "compressed_bytes": 2817,
+        "decoded_bytes": 15770,
+        "decoded_sha256": "4207f1cc2a7956666f835592319f13a110acad274b3a81e32850a47b3442ff03",
+        "scope_rule_count": 159
+      }
+    },
+    "monokai-extended-origin": {
+      "display_name": "Monokai Extended Origin",
+      "aliases": [
+        "monokai-extended-origin",
+        "Monokai Extended Origin"
+      ],
+      "colors": {
+        "fg": "#f8f8f2",
+        "bg": "#272822",
+        "accent": "#ae81ff",
+        "muted": "#75715e",
+        "success": "#a6e22e",
+        "selection": "#49483e",
+        "warning": "#e6db74"
+      },
+      "raw_rgba": {
+        "fg": "#f8f8f2ff",
+        "bg": "#272822ff",
+        "accent": "#ae81ffff",
+        "muted": "#75715eff",
+        "success": "#a6e22eff",
+        "selection": "#49483eff",
+        "warning": "#e6db74ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[2].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[81].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[82].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Monokai Extended Origin",
+        "author": "github.com/SuperPaintman",
+        "payload_offset": 217635652,
+        "compressed_bytes": 2610,
+        "decoded_bytes": 14541,
+        "decoded_sha256": "e7dbaf5b4af438470c23f21ba120f27296b1b930aa488458041881a401f3b249",
+        "scope_rule_count": 154
+      }
+    },
+    "nord": {
+      "display_name": "Nord",
+      "aliases": [
+        "nord",
+        "Nord"
+      ],
+      "colors": {
+        "fg": "#d8dee9",
+        "bg": "#2e3440",
+        "accent": "#b48ead",
+        "muted": "#616e88",
+        "success": "#a3be8c",
+        "selection": "#3f4758",
+        "warning": "#ebcb8b"
+      },
+      "raw_rgba": {
+        "fg": "#d8dee9ff",
+        "bg": "#2e3440ff",
+        "accent": "#b48eadff",
+        "muted": "#616e88ff",
+        "success": "#a3be8cff",
+        "selection": "#434c5ecc",
+        "warning": "#ebcb8bff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[1].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[35].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[37].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Nord",
+        "author": "Arctic Ice Studio",
+        "payload_offset": 217638282,
+        "compressed_bytes": 2915,
+        "decoded_bytes": 18482,
+        "decoded_sha256": "0d8c16eccb8a0aa2c3a929133f8346377e8b28e0f407a7400c803d2ba24c3f1c",
+        "scope_rule_count": 140
+      }
+    },
+    "one-half-dark": {
+      "display_name": "OneHalfDark",
+      "aliases": [
+        "one-half-dark",
+        "OneHalfDark"
+      ],
+      "colors": {
+        "fg": "#dcdfe4",
+        "bg": "#282c34",
+        "accent": "#e5c07b",
+        "muted": "#5c6370",
+        "success": "#98c379",
+        "selection": "#474e5d",
+        "warning": "#e5c07b"
+      },
+      "raw_rgba": {
+        "fg": "#dcdfe4ff",
+        "bg": "#282c34ff",
+        "accent": "#e5c07bff",
+        "muted": "#5c6370ff",
+        "success": "#98c379ff",
+        "selection": "#474e5dff",
+        "warning": "#e5c07bff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[11].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[37].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[39].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "OneHalfDark",
+        "author": "Son A. Pham <sp@sonpham.me>",
+        "payload_offset": 217641224,
+        "compressed_bytes": 883,
+        "decoded_bytes": 4251,
+        "decoded_sha256": "a74fd00e7d25001e65c910df5b77bd0d6f69b612d6d060b24091ac60a3623817",
+        "scope_rule_count": 46
+      }
+    },
+    "one-half-light": {
+      "display_name": "OneHalfLight",
+      "aliases": [
+        "one-half-light",
+        "OneHalfLight"
+      ],
+      "colors": {
+        "fg": "#383a42",
+        "bg": "#fafafa",
+        "accent": "#c18401",
+        "muted": "#a0a1a7",
+        "success": "#98c379",
+        "selection": "#bfceff",
+        "warning": "#e5c07b"
+      },
+      "raw_rgba": {
+        "fg": "#383a42ff",
+        "bg": "#fafafaff",
+        "accent": "#c18401ff",
+        "muted": "#a0a1a7ff",
+        "success": "#98c379ff",
+        "selection": "#bfceffff",
+        "warning": "#e5c07bff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[11].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[37].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[39].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "OneHalfLight",
+        "author": "Son A. Pham <sp@sonpham.me>",
+        "payload_offset": 217642135,
+        "compressed_bytes": 844,
+        "decoded_bytes": 4059,
+        "decoded_sha256": "2ea565857cc1b65d0aa37869b2b6c08fce9b7fa1e632e63cd26db6a39962e056",
+        "scope_rule_count": 46
+      }
+    },
+    "solarized-dark": {
+      "display_name": "Solarized (dark)",
+      "aliases": [
+        "solarized-dark",
+        "Solarized (dark)"
+      ],
+      "colors": {
+        "fg": "#839496",
+        "bg": "#002b36",
+        "accent": "#6c71c4",
+        "muted": "#586e75",
+        "success": "#859900",
+        "selection": "#2c4c55",
+        "warning": "#b58900"
+      },
+      "raw_rgba": {
+        "fg": "#839496ff",
+        "bg": "#002b36ff",
+        "accent": "#6c71c4ff",
+        "muted": "#586e75ff",
+        "success": "#859900ff",
+        "selection": "#2c4c55ff",
+        "warning": "#b58900ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[4].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[77].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[76].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Solarized (dark)",
+        "author": null,
+        "payload_offset": 217643011,
+        "compressed_bytes": 1977,
+        "decoded_bytes": 10527,
+        "decoded_sha256": "b894950f1185259d6a811daadd2419bdd11efb91ab57582a94ad7ad6d414d095",
+        "scope_rule_count": 91
+      }
+    },
+    "solarized-light": {
+      "display_name": "Solarized (light)",
+      "aliases": [
+        "solarized-light",
+        "Solarized (light)"
+      ],
+      "colors": {
+        "fg": "#657b83",
+        "bg": "#fdf6e3",
+        "accent": "#6c71c4",
+        "muted": "#93a1a1",
+        "success": "#859900",
+        "selection": "#eee8d5",
+        "warning": "#b58900"
+      },
+      "raw_rgba": {
+        "fg": "#657b83ff",
+        "bg": "#fdf6e3ff",
+        "accent": "#6c71c4ff",
+        "muted": "#93a1a1ff",
+        "success": "#859900ff",
+        "selection": "#eee8d5ff",
+        "warning": "#b58900ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[4].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[77].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[76].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Solarized (light)",
+        "author": null,
+        "payload_offset": 217645021,
+        "compressed_bytes": 1984,
+        "decoded_bytes": 10528,
+        "decoded_sha256": "696b206fca422f2b58996f9b18ba9282c5a5097bdc604f4da89627d9d91184d8",
+        "scope_rule_count": 91
+      }
+    },
+    "sublime-snazzy": {
+      "display_name": "Sublime Snazzy",
+      "aliases": [
+        "sublime-snazzy",
+        "Sublime Snazzy"
+      ],
+      "colors": {
+        "fg": "#f8f8f2",
+        "bg": "#282a36",
+        "accent": "#f1f1f0",
+        "muted": "#686868",
+        "success": "#9aedfe",
+        "selection": "#57c7ff",
+        "warning": "#f3f99d"
+      },
+      "raw_rgba": {
+        "fg": "#f8f8f2ff",
+        "bg": "#282a36ff",
+        "accent": "#f1f1f0ff",
+        "muted": "#686868ff",
+        "success": "#9aedfeff",
+        "selection": "#57c7ffff",
+        "warning": "#f3f99dff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[2].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[11].foreground (entity.name.function; target=entity.name.function)",
+        "selection": "settings.selection",
+        "warning": "scopes[1].foreground (string; target=string)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "Sublime Snazzy",
+        "author": null,
+        "payload_offset": 217647035,
+        "compressed_bytes": 402,
+        "decoded_bytes": 1487,
+        "decoded_sha256": "4805db9d2d2b702317d65a13ddb1f152aa68aa2c9e11301fd3a9ccd6a1377cff",
+        "scope_rule_count": 21
+      }
+    },
+    "two-dark": {
+      "display_name": "TwoDark",
+      "aliases": [
+        "two-dark",
+        "TwoDark"
+      ],
+      "colors": {
+        "fg": "#abb2bf",
+        "bg": "#282c34",
+        "accent": "#d19a66",
+        "muted": "#5c6370",
+        "success": "#98c379",
+        "selection": "#3d4350",
+        "warning": "#c678dd"
+      },
+      "raw_rgba": {
+        "fg": "#abb2bfff",
+        "bg": "#282c34ff",
+        "accent": "#d19a66ff",
+        "muted": "#5c6370ff",
+        "success": "#98c379ff",
+        "selection": "#3d4350ff",
+        "warning": "#c678ddff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[13].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[1].foreground (comment; target=comment)",
+        "success": "scopes[32].foreground (markup.inserted; target=markup.inserted)",
+        "selection": "settings.selection",
+        "warning": "scopes[34].foreground (markup.changed; target=markup.changed)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "TwoDark",
+        "author": "Roberto Mauro (erremauro@icloud.com)",
+        "payload_offset": 217647460,
+        "compressed_bytes": 1514,
+        "decoded_bytes": 8170,
+        "decoded_sha256": "bac04a3ff5c092702e0b1b0b3dca84de89546651e857e9c19634a5e0a45a0c77",
+        "scope_rule_count": 73
+      }
+    },
+    "zenburn": {
+      "display_name": "zenburn",
+      "aliases": [
+        "zenburn"
+      ],
+      "colors": {
+        "fg": "#dedede",
+        "bg": "#3f3f3f",
+        "accent": "#87d6d5",
+        "muted": "#87ae86",
+        "success": "#fffd87",
+        "selection": "#696969",
+        "warning": "#d68686"
+      },
+      "raw_rgba": {
+        "fg": "#dededeff",
+        "bg": "#3f3f3fff",
+        "accent": "#87d6d5ff",
+        "muted": "#87ae86ff",
+        "success": "#fffd87ff",
+        "selection": "#8383839c",
+        "warning": "#d68686ff"
+      },
+      "role_sources": {
+        "fg": "settings.foreground",
+        "bg": "settings.background",
+        "accent": "scopes[11].foreground (constant.numeric; target=constant.numeric)",
+        "muted": "scopes[0].foreground (comment; target=comment)",
+        "success": "scopes[34].foreground (entity.name.function; target=entity.name.function)",
+        "selection": "settings.selection",
+        "warning": "scopes[9].foreground (string; target=string)"
+      },
+      "terminal_colors": {},
+      "evidence": {
+        "theme_name": "zenburn",
+        "author": "Jani Nurminen.  Adapted and modified by Colin T.A. Gray and William D. Neumann",
+        "payload_offset": 217663180,
+        "compressed_bytes": 1378,
+        "decoded_bytes": 5888,
+        "decoded_sha256": "23de647b9541f0e9cd3aa13b465ce9bef7058c48382a4292a510f7371a617cbb",
+        "scope_rule_count": 58
+      }
+    }
+  }
+}

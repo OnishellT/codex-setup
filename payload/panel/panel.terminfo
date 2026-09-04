@@ -1,0 +1,5 @@
+codex-panel-direct|Codex sidebar RGB plus exact indexed terminal colors,
+    colors#16777472,
+    setaf=\E[%?%p1%{16777216}%<%t38:2::%p1%{65536}%/%d:%p1%{256}%/%{255}%&%d:%p1%{255}%&%d%e38;5;%p1%{16777216}%-%d%;m,
+    setab=\E[%?%p1%{16777216}%<%t48:2::%p1%{65536}%/%d:%p1%{256}%/%{255}%&%d:%p1%{255}%&%d%e48;5;%p1%{16777216}%-%d%;m,
+    use=tmux-direct,

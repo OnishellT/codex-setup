@@ -1,0 +1,5 @@
+[tui]
+theme = "catppuccin-mocha"
+# Personal profile: inherits the shared model, eager delegation, and all other
+# base settings from config.toml and the shared instructions from AGENTS.md.
+# Add only personal-specific overrides here.

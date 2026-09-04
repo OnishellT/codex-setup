@@ -1,0 +1,10 @@
+{
+  "name": "ponytail",
+  "version": "4.9.0",
+  "repository": "https://github.com/DietrichGebert/ponytail",
+  "commit": "2ed6c52c9d7e5e56942508591085fd45dea277d3",
+  "license": "MIT",
+  "files": "Upstream hooks/*.js plus LICENSE, with ponytail-instructions.js adapted to load ../instructions.md",
+  "adaptation": "instructions.md is a private Codex-hook resource derived from Ponytail's core skill guidance. The six unmodified official skills from the same commit are packaged separately in payload/skills and installed into CODEX_HOME/skills.",
+  "integration": "User-level Codex hooks and six native skills; not a marketplace plugin"
+}

@@ -1,0 +1,41 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 {{CODEX_HOME_SHELL}}/integrations/ponytail/runner.py activate",
+            "timeout": 5,
+            "statusMessage": "[codex-setup:ponytail] Loading Ponytail"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 {{CODEX_HOME_SHELL}}/integrations/ponytail/runner.py subagent",
+            "timeout": 5,
+            "statusMessage": "[codex-setup:ponytail] Loading subagent guidance"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 {{CODEX_HOME_SHELL}}/integrations/ponytail/runner.py prompt",
+            "timeout": 5,
+            "statusMessage": "[codex-setup:ponytail] Tracking Ponytail mode"
+          }
+        ]
+      }
+    ]
+  }
+}

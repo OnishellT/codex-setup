@@ -1,0 +1,16 @@
+model = "gpt-5.6-sol"
+model_reasoning_effort = "high"
+service_tier = "default"
+
+[features]
+apps = false
+hooks = false
+plugin_sharing = false
+plugins = false
+remote_plugin = false
+skill_mcp_dependency_install = false
+workspace_dependencies = false
+js_repl = false
+
+[tui]
+theme = "dracula"
