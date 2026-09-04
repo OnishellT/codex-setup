@@ -82,10 +82,18 @@ def changed_paths(repo):
 
 
 def branch_source(config):
-    text = config.read_text(encoding="utf-8")
-    # A branch pin makes an external source non-reproducible.  Qlty's source
-    # tables use this key; accept tags or immutable revisions instead.
-    return bool(re.search(r"(?mi)^\s*branch\s*=", text))
+    in_source = False
+    for raw in config.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if re.match(r"^\[\[source\]\](?:\s+#.*)?$", line):
+            in_source = True
+        elif line.startswith("["):
+            in_source = False
+        elif in_source and re.match(r"^branch\s*=", line):
+            return True
+    return False
 
 
 def setup(args):
@@ -151,11 +159,21 @@ def has_results(payload):
     )
 
 
-def command(executable, repo, args):
+def valid_schema(name, payload):
+    if name in ("check", "smells"):
+        return (isinstance(payload, dict) and payload.get("version") == "2.1.0" and
+                isinstance(payload.get("runs"), list) and
+                all(isinstance(run, dict) and isinstance(run.get("results"), list)
+                    for run in payload["runs"]))
+    return name == "metrics" and isinstance(payload, dict) and isinstance(payload.get("stats"), list)
+
+
+def command(executable, repo, name, args):
     result = qlty_run(executable, repo, *args)
     payload, json_valid = parsed(result)
-    status = "ok" if result.returncode == 0 and json_valid else "failed"
-    return {"args": ["qlty", "--no-upgrade-check", *args], "json_valid": json_valid,
+    schema_valid = json_valid and valid_schema(name, payload)
+    status = "ok" if result.returncode == 0 and schema_valid else "failed"
+    return {"args": ["qlty", "--no-upgrade-check", *args], "json_valid": json_valid, "schema_valid": schema_valid,
             "payload": payload, "returncode": result.returncode, "status": status,
             "stderr": result.stderr if status == "failed" else ""}
 
@@ -194,13 +212,13 @@ def scan(args):
               "upstream_sha": upstream.stdout.strip(),
               "upstream": args.upstream, "version": qlty_version(executable, repo)}
     checks = [
-        ("check", ["check", "--no-fix", "--no-progress", "--upstream", args.upstream, "--sarif"]),
-        ("smells", ["smells", "--upstream", args.upstream, "--no-snippets", "--sarif"]),
-        ("metrics", ["metrics", "--functions", "--upstream", args.upstream, "--quiet", "--json"]),
+        ("check", ["check", "--no-fix", "--no-progress", "--upstream", upstream.stdout.strip(), "--sarif"]),
+        ("smells", ["smells", "--upstream", upstream.stdout.strip(), "--no-snippets", "--sarif"]),
+        ("metrics", ["metrics", "--functions", "--upstream", upstream.stdout.strip(), "--quiet", "--json"]),
     ]
     failed = False
     for name, command_args in checks:
-        item = command(executable, repo, command_args)
+        item = command(executable, repo, name, command_args)
         item["name"] = name
         report["commands"].append(item)
         if name == "smells" and has_results(item["payload"]):

@@ -50,14 +50,18 @@ if args == ['--no-upgrade-check', 'init', '--no']:
  sys.exit()
 if os.environ.get('QLTY_INVALID_JSON') and any(name in args for name in ('check', 'smells', 'metrics')):
  print('{not json'); sys.exit()
+if os.environ.get('QLTY_BAD_SCHEMA') and any(name in args for name in ('check', 'smells', 'metrics')):
+ print(json.dumps({})); sys.exit()
+if os.environ.get('QLTY_BAD_RUNS') and any(name in args for name in ('check', 'smells', 'metrics')):
+ print(json.dumps({'version': '2.1.0', 'runs': [{}]} if '--sarif' in args else [])); sys.exit()
 if os.environ.get('QLTY_VOLATILE') and '--sarif' in args:
  print('progress', file=sys.stderr)
- print(json.dumps({'runs': [{'tool': {'driver': {'name': 'fake', 'notifications': [{'message': {'text': os.urandom(8).hex()}}]}}, 'invocations': [{'executionSuccessful': True, 'id': os.urandom(8).hex()}], 'results': []}]})); sys.exit()
+ print(json.dumps({'version': '2.1.0', 'runs': [{'tool': {'driver': {'name': 'fake', 'notifications': [{'message': {'text': os.urandom(8).hex()}}]}}, 'invocations': [{'executionSuccessful': True, 'id': os.urandom(8).hex()}], 'results': []}]})); sys.exit()
 if 'smells' in args:
- print(json.dumps({'runs': [{'results': [{}] if os.environ.get('QLTY_SMELLS') else []}]})); sys.exit()
+ print(json.dumps({'version': '2.1.0', 'runs': [{'results': [{}] if os.environ.get('QLTY_SMELLS') else []}]})); sys.exit()
 if 'metrics' in args and os.environ.get('QLTY_METRICS_FAIL'): sys.exit(3)
 if 'check' in args and os.environ.get('QLTY_CHECK_FAIL'): sys.exit(2)
-print(json.dumps({'runs': []} if 'sarif' in args else {'functions': []}))
+print(json.dumps({'version': '2.1.0', 'runs': [{'results': []}]} if '--sarif' in args else {'stats': []}))
 """)
         fake.chmod(0o755)
 
@@ -81,9 +85,11 @@ print(json.dumps({'runs': []} if 'sarif' in args else {'functions': []}))
         self.assertEqual(config.read_bytes(), before)
         self.assertEqual(json.loads(result.stdout)["status"], "existing")
         self.assertIn(["--no-upgrade-check", "config", "validate"], [call["args"] for call in self.calls()])
-        config.write_text("[[sources]]\nbranch = 'main'\n")
+        config.write_text("# branch = 'main'\n[[plugin]]\nbranch = 'main'\n")
+        self.assertEqual(json.loads(self.helper("setup", "--repo", str(self.repo)).stdout)["status"], "existing")
+        config.write_text("[[source]]\nbranch = 'main'\n")
         self.assertNotEqual(self.helper("setup", "--repo", str(self.repo), check=False).returncode, 0)
-        self.assertEqual(config.read_text(), "[[sources]]\nbranch = 'main'\n")
+        self.assertEqual(config.read_text(), "[[source]]\nbranch = 'main'\n")
 
     def test_init_validates_and_commits_only_qlty(self):
         result = self.helper("setup", "--repo", str(self.repo))
@@ -95,7 +101,7 @@ print(json.dumps({'runs': []} if 'sarif' in args else {'functions': []}))
 
     def test_rejects_branch_sources_and_changes_outside_qlty(self):
         bad = self.helper("setup", "--repo", str(self.repo), check=False,
-                          env={"QLTY_CONFIG": "[[sources]]\nbranch = 'main'\n"})
+                          env={"QLTY_CONFIG": "[[source]]\nbranch = 'main'\n"})
         self.assertNotEqual(bad.returncode, 0)
         self.assertEqual(run("git", "rev-list", "--count", "HEAD", cwd=self.repo).stdout.strip(), "1")
         self.temp.cleanup()
@@ -115,9 +121,9 @@ print(json.dumps({'runs': []} if 'sarif' in args else {'functions': []}))
         self.assertEqual(report["upstream_sha"], report["head"])
         self.assertEqual(report["config_sha256"], hashlib.sha256((self.repo / ".qlty" / "qlty.toml").read_bytes()).hexdigest())
         self.assertEqual([item["args"] for item in report["commands"]], [
-            ["qlty", "--no-upgrade-check", "check", "--no-fix", "--no-progress", "--upstream", "main", "--sarif"],
-            ["qlty", "--no-upgrade-check", "smells", "--upstream", "main", "--no-snippets", "--sarif"],
-            ["qlty", "--no-upgrade-check", "metrics", "--functions", "--upstream", "main", "--quiet", "--json"],
+            ["qlty", "--no-upgrade-check", "check", "--no-fix", "--no-progress", "--upstream", report["upstream_sha"], "--sarif"],
+            ["qlty", "--no-upgrade-check", "smells", "--upstream", report["upstream_sha"], "--no-snippets", "--sarif"],
+            ["qlty", "--no-upgrade-check", "metrics", "--functions", "--upstream", report["upstream_sha"], "--quiet", "--json"],
         ])
 
     def test_scan_failures_do_not_pass(self):
@@ -135,6 +141,15 @@ print(json.dumps({'runs': []} if 'sarif' in args else {'functions': []}))
         self.assertEqual(report["status"], "failed")
         self.assertTrue(all(not item["json_valid"] and item["status"] == "failed"
                             for item in report["commands"]))
+        malformed = self.helper("scan", "--repo", str(self.repo), "--upstream", "main", check=False,
+                                env={"QLTY_BAD_SCHEMA": "1"})
+        self.assertNotEqual(malformed.returncode, 0)
+        self.assertTrue(all(item["json_valid"] and not item["schema_valid"] and item["status"] == "failed"
+                            for item in json.loads(malformed.stdout)["commands"]))
+        malformed = self.helper("scan", "--repo", str(self.repo), "--upstream", "main", check=False,
+                                env={"QLTY_BAD_RUNS": "1"})
+        self.assertNotEqual(malformed.returncode, 0)
+        self.assertTrue(all(not item["schema_valid"] for item in json.loads(malformed.stdout)["commands"]))
         self.assertNotEqual(self.helper("scan", "--repo", str(self.repo), "--upstream", "missing", check=False).returncode, 0)
 
     def test_scan_rejects_output_inside_repo(self):
