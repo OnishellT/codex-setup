@@ -56,6 +56,8 @@ if os.environ.get('QLTY_BAD_RUNS') and any(name in args for name in ('check', 's
  print(json.dumps({'version': '2.1.0', 'runs': [{}]} if '--sarif' in args else [])); sys.exit()
 if os.environ.get('QLTY_MISSING_DRIVER') and '--sarif' in args:
  print(json.dumps({'version': '2.1.0', 'runs': [{'results': []}]})); sys.exit()
+if os.environ.get('QLTY_EMPTY_RUNS') and '--sarif' in args:
+ print(json.dumps({'version': '2.1.0', 'runs': []})); sys.exit()
 if os.environ.get('QLTY_BARE_STATS') and '--json' in args:
  print(json.dumps({'stats': []})); sys.exit()
 if os.environ.get('QLTY_EMPTY_STATS') and '--json' in args:
@@ -63,6 +65,8 @@ if os.environ.get('QLTY_EMPTY_STATS') and '--json' in args:
 if os.environ.get('QLTY_VOLATILE') and '--sarif' in args:
  print('progress', file=sys.stderr)
  print(json.dumps({'version': '2.1.0', 'runs': [{'tool': {'driver': {'name': 'qlty', 'notifications': [{'message': {'text': os.urandom(8).hex()}}]}}, 'invocations': [{'executionSuccessful': True, 'id': os.urandom(8).hex()}], 'results': []}]})); sys.exit()
+if os.environ.get('QLTY_CHECK_FINDINGS') and 'check' in args:
+ print(json.dumps({'version': '2.1.0', 'runs': [{'tool': {'driver': {'name': 'qlty'}}, 'results': [{}]}]})); sys.exit()
 if 'smells' in args:
  print(json.dumps({'version': '2.1.0', 'runs': [{'tool': {'driver': {'name': 'qlty'}}, 'results': [{}] if os.environ.get('QLTY_SMELLS') else []}]})); sys.exit()
 if 'metrics' in args and os.environ.get('QLTY_METRICS_FAIL'): sys.exit(3)
@@ -171,6 +175,14 @@ print(json.dumps({'version': '2.1.0', 'runs': [{'tool': {'driver': {'name': 'qlt
         empty_stats = self.helper("scan", "--repo", str(self.repo), "--upstream", "main",
                                   env={"QLTY_EMPTY_STATS": "1"})
         self.assertEqual(json.loads(empty_stats.stdout)["status"], "ok")
+        empty_runs = self.helper("scan", "--repo", str(self.repo), "--upstream", "main", check=False,
+                                 env={"QLTY_EMPTY_RUNS": "1"})
+        self.assertNotEqual(empty_runs.returncode, 0)
+        self.assertTrue(all(not item["schema_valid"] for item in json.loads(empty_runs.stdout)["commands"][:2]))
+        findings = self.helper("scan", "--repo", str(self.repo), "--upstream", "main", check=False,
+                               env={"QLTY_CHECK_FINDINGS": "1"})
+        self.assertNotEqual(findings.returncode, 0)
+        self.assertEqual(json.loads(findings.stdout)["commands"][0]["returncode"], 0)
         self.assertNotEqual(self.helper("scan", "--repo", str(self.repo), "--upstream", "missing", check=False).returncode, 0)
 
     def test_scan_rejects_output_inside_repo(self):

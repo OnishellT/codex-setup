@@ -162,7 +162,7 @@ def has_results(payload):
 def valid_schema(name, payload):
     if name in ("check", "smells"):
         return (isinstance(payload, dict) and payload.get("version") == "2.1.0" and
-                isinstance(payload.get("runs"), list) and
+                isinstance(payload.get("runs"), list) and bool(payload["runs"]) and
                 all(isinstance(run, dict) and isinstance(run.get("results"), list) and
                     isinstance(run.get("tool"), dict) and isinstance(run["tool"].get("driver"), dict) and
                     isinstance(run["tool"]["driver"].get("name"), str) and run["tool"]["driver"]["name"]
@@ -232,7 +232,7 @@ def scan(args):
         item = command(executable, repo, name, command_args)
         item["name"] = name
         report["commands"].append(item)
-        if name == "smells" and has_results(item["payload"]):
+        if name in ("check", "smells") and has_results(item["payload"]):
             item["status"] = "failed"
         failed |= item["status"] != "ok"
     report["status"] = "failed" if failed else "ok"
