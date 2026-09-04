@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -47,6 +48,8 @@ if args == ['--no-upgrade-check', 'init', '--no']:
  (root / '.qlty' / 'qlty.toml').write_text(os.environ.get('QLTY_CONFIG', 'config_version = "1"\\n'))
  if os.environ.get('QLTY_OUTSIDE'): (root / 'outside.txt').write_text('bad')
  sys.exit()
+if os.environ.get('QLTY_INVALID_JSON') and any(name in args for name in ('check', 'smells', 'metrics')):
+ print('{not json'); sys.exit()
 if 'smells' in args:
  print(json.dumps({'runs': [{'results': [{}] if os.environ.get('QLTY_SMELLS') else []}]})); sys.exit()
 if 'metrics' in args and os.environ.get('QLTY_METRICS_FAIL'): sys.exit(3)
@@ -75,6 +78,9 @@ print(json.dumps({'runs': []} if 'sarif' in args else {'functions': []}))
         self.assertEqual(config.read_bytes(), before)
         self.assertEqual(json.loads(result.stdout)["status"], "existing")
         self.assertIn(["--no-upgrade-check", "config", "validate"], [call["args"] for call in self.calls()])
+        config.write_text("[[sources]]\nbranch = 'main'\n")
+        self.assertNotEqual(self.helper("setup", "--repo", str(self.repo), check=False).returncode, 0)
+        self.assertEqual(config.read_text(), "[[sources]]\nbranch = 'main'\n")
 
     def test_init_validates_and_commits_only_qlty(self):
         result = self.helper("setup", "--repo", str(self.repo))
@@ -98,14 +104,17 @@ print(json.dumps({'runs': []} if 'sarif' in args else {'functions': []}))
     def test_scan_uses_exact_arguments_and_stable_report(self):
         self.helper("setup", "--repo", str(self.repo))
         output = Path(self.temp.name) / "report.json"
-        result = self.helper("scan", "--repo", str(self.repo), "--upstream", "origin/main", "--output", str(output))
+        result = self.helper("scan", "--repo", str(self.repo), "--upstream", "main", "--output", str(output))
         report = json.loads(result.stdout)
         self.assertEqual(report, json.loads(output.read_text()))
         self.assertEqual(report["status"], "ok")
+        self.assertEqual(report["head"], run("git", "rev-parse", "HEAD", cwd=self.repo).stdout.strip())
+        self.assertEqual(report["upstream_sha"], report["head"])
+        self.assertEqual(report["config_sha256"], hashlib.sha256((self.repo / ".qlty" / "qlty.toml").read_bytes()).hexdigest())
         self.assertEqual([item["args"] for item in report["commands"]], [
-            ["qlty", "--no-upgrade-check", "check", "--no-fix", "--no-progress", "--upstream", "origin/main", "--sarif"],
-            ["qlty", "--no-upgrade-check", "smells", "--upstream", "origin/main", "--no-snippets", "--sarif"],
-            ["qlty", "--no-upgrade-check", "metrics", "--functions", "--upstream", "origin/main", "--quiet", "--json"],
+            ["qlty", "--no-upgrade-check", "check", "--no-fix", "--no-progress", "--upstream", "main", "--sarif"],
+            ["qlty", "--no-upgrade-check", "smells", "--upstream", "main", "--no-snippets", "--sarif"],
+            ["qlty", "--no-upgrade-check", "metrics", "--functions", "--upstream", "main", "--quiet", "--json"],
         ])
 
     def test_scan_failures_do_not_pass(self):
@@ -116,6 +125,21 @@ print(json.dumps({'runs': []} if 'sarif' in args else {'functions': []}))
                                         env={"QLTY_SMELLS": "1"}).returncode, 0)
         self.assertNotEqual(self.helper("scan", "--repo", str(self.repo), "--upstream", "main", check=False,
                                         env={"QLTY_METRICS_FAIL": "1"}).returncode, 0)
+        invalid = self.helper("scan", "--repo", str(self.repo), "--upstream", "main", check=False,
+                              env={"QLTY_INVALID_JSON": "1"})
+        self.assertNotEqual(invalid.returncode, 0)
+        report = json.loads(invalid.stdout)
+        self.assertEqual(report["status"], "failed")
+        self.assertTrue(all(not item["json_valid"] and item["status"] == "failed"
+                            for item in report["commands"]))
+        self.assertNotEqual(self.helper("scan", "--repo", str(self.repo), "--upstream", "missing", check=False).returncode, 0)
+
+    def test_scan_rejects_output_inside_repo(self):
+        self.helper("setup", "--repo", str(self.repo))
+        result = self.helper("scan", "--repo", str(self.repo), "--upstream", "main", "--output",
+                             str(self.repo / "report.json"), check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.repo / "report.json").exists())
 
 
 if __name__ == "__main__":

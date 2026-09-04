@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Configure and run Qlty without changing reviewed source code."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -97,6 +98,8 @@ def setup(args):
         validate(executable, repo)
         if config.read_bytes() != before:
             raise RuntimeError("la validación modificó .qlty/qlty.toml")
+        if branch_source(config):
+            raise RuntimeError("la configuración usa una fuente externa basada en branch")
         print_json({"config": str(config), "repo": str(repo), "status": "existing", "version": version})
         return
     if not clean(repo):
@@ -127,9 +130,9 @@ def setup(args):
 
 def parsed(result):
     try:
-        return json.loads(result.stdout) if result.stdout.strip() else None
+        return json.loads(result.stdout), True
     except json.JSONDecodeError:
-        return {"raw": result.stdout}
+        return {"raw": result.stdout}, False
 
 
 def has_results(payload):
@@ -140,8 +143,10 @@ def has_results(payload):
 
 def command(executable, repo, args):
     result = qlty_run(executable, repo, *args)
-    return {"args": ["qlty", "--no-upgrade-check", *args], "payload": parsed(result),
-            "returncode": result.returncode, "stderr": result.stderr}
+    payload, json_valid = parsed(result)
+    return {"args": ["qlty", "--no-upgrade-check", *args], "json_valid": json_valid,
+            "payload": payload, "returncode": result.returncode, "status": "ok" if result.returncode == 0 and json_valid else "failed",
+            "stderr": result.stderr}
 
 
 def print_json(value, output=None):
@@ -151,11 +156,29 @@ def print_json(value, output=None):
     sys.stdout.write(text)
 
 
+def output_path(value, repo):
+    if not value:
+        return None
+    path = Path(value).resolve()
+    if path == repo or repo in path.parents:
+        raise RuntimeError("--output debe estar fuera del repositorio")
+    return path
+
+
 def scan(args):
     repo = repository(args.repo)
     executable = qlty()
+    output = output_path(args.output, repo)
+    config = repo / ".qlty" / "qlty.toml"
+    if not config.is_file():
+        raise RuntimeError("falta .qlty/qlty.toml")
+    upstream = git(repo, "rev-parse", "--verify", args.upstream + "^{commit}", check=False)
+    if upstream.returncode:
+        raise RuntimeError("el upstream no existe: " + args.upstream)
     validate(executable, repo)
-    report = {"commands": [], "repo": str(repo), "schema": 1,
+    report = {"commands": [], "config_sha256": hashlib.sha256(config.read_bytes()).hexdigest(),
+              "head": git(repo, "rev-parse", "HEAD").stdout.strip(), "repo": str(repo), "schema": 1,
+              "upstream_sha": upstream.stdout.strip(),
               "upstream": args.upstream, "version": qlty_version(executable, repo)}
     checks = [
         ("check", ["check", "--no-fix", "--no-progress", "--upstream", args.upstream, "--sarif"]),
@@ -167,10 +190,11 @@ def scan(args):
         item = command(executable, repo, command_args)
         item["name"] = name
         report["commands"].append(item)
-        failed |= item["returncode"] != 0
-        failed |= name == "smells" and has_results(item["payload"])
+        if name == "smells" and has_results(item["payload"]):
+            item["status"] = "failed"
+        failed |= item["status"] != "ok"
     report["status"] = "failed" if failed else "ok"
-    print_json(report, args.output)
+    print_json(report, output)
     if failed:
         raise RuntimeError("el escaneo de qlty falló o detectó smells")
 
