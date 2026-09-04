@@ -163,9 +163,20 @@ def valid_schema(name, payload):
     if name in ("check", "smells"):
         return (isinstance(payload, dict) and payload.get("version") == "2.1.0" and
                 isinstance(payload.get("runs"), list) and
-                all(isinstance(run, dict) and isinstance(run.get("results"), list)
+                all(isinstance(run, dict) and isinstance(run.get("results"), list) and
+                    isinstance(run.get("tool"), dict) and isinstance(run["tool"].get("driver"), dict) and
+                    isinstance(run["tool"]["driver"].get("name"), str) and run["tool"]["driver"]["name"]
                     for run in payload["runs"]))
-    return name == "metrics" and isinstance(payload, dict) and isinstance(payload.get("stats"), list)
+    if name != "metrics" or not isinstance(payload, dict):
+        return False
+    if not (isinstance(payload.get("invocations"), list) and isinstance(payload.get("issues"), list) and
+            isinstance(payload.get("messages"), list) and isinstance(payload.get("metadata"), dict) and
+            isinstance(payload.get("stats"), list)):
+        return False
+    return all(isinstance(stat, dict) and isinstance(stat.get("path"), str) and
+               isinstance(stat.get("name"), str) and type(stat.get("cyclomatic")) is int and
+               stat["cyclomatic"] >= 0 and type(stat.get("complexity")) is int and stat["complexity"] >= 0
+               for stat in payload["stats"])
 
 
 def command(executable, repo, name, args):

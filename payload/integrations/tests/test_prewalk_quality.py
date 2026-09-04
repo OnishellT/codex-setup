@@ -54,14 +54,20 @@ if os.environ.get('QLTY_BAD_SCHEMA') and any(name in args for name in ('check', 
  print(json.dumps({})); sys.exit()
 if os.environ.get('QLTY_BAD_RUNS') and any(name in args for name in ('check', 'smells', 'metrics')):
  print(json.dumps({'version': '2.1.0', 'runs': [{}]} if '--sarif' in args else [])); sys.exit()
+if os.environ.get('QLTY_MISSING_DRIVER') and '--sarif' in args:
+ print(json.dumps({'version': '2.1.0', 'runs': [{'results': []}]})); sys.exit()
+if os.environ.get('QLTY_BARE_STATS') and '--json' in args:
+ print(json.dumps({'stats': []})); sys.exit()
+if os.environ.get('QLTY_EMPTY_STATS') and '--json' in args:
+ print(json.dumps({'invocations': [], 'issues': [], 'messages': [], 'metadata': {}, 'stats': []})); sys.exit()
 if os.environ.get('QLTY_VOLATILE') and '--sarif' in args:
  print('progress', file=sys.stderr)
- print(json.dumps({'version': '2.1.0', 'runs': [{'tool': {'driver': {'name': 'fake', 'notifications': [{'message': {'text': os.urandom(8).hex()}}]}}, 'invocations': [{'executionSuccessful': True, 'id': os.urandom(8).hex()}], 'results': []}]})); sys.exit()
+ print(json.dumps({'version': '2.1.0', 'runs': [{'tool': {'driver': {'name': 'qlty', 'notifications': [{'message': {'text': os.urandom(8).hex()}}]}}, 'invocations': [{'executionSuccessful': True, 'id': os.urandom(8).hex()}], 'results': []}]})); sys.exit()
 if 'smells' in args:
- print(json.dumps({'version': '2.1.0', 'runs': [{'results': [{}] if os.environ.get('QLTY_SMELLS') else []}]})); sys.exit()
+ print(json.dumps({'version': '2.1.0', 'runs': [{'tool': {'driver': {'name': 'qlty'}}, 'results': [{}] if os.environ.get('QLTY_SMELLS') else []}]})); sys.exit()
 if 'metrics' in args and os.environ.get('QLTY_METRICS_FAIL'): sys.exit(3)
 if 'check' in args and os.environ.get('QLTY_CHECK_FAIL'): sys.exit(2)
-print(json.dumps({'version': '2.1.0', 'runs': [{'results': []}]} if '--sarif' in args else {'stats': []}))
+print(json.dumps({'version': '2.1.0', 'runs': [{'tool': {'driver': {'name': 'qlty'}}, 'results': []}]} if '--sarif' in args else {'invocations': [], 'issues': [], 'messages': [], 'metadata': {'version': '0.644.0'}, 'stats': [{'path': 'app.py', 'name': 'main', 'cyclomatic': 1, 'complexity': 1}]}))
 """)
         fake.chmod(0o755)
 
@@ -120,6 +126,10 @@ print(json.dumps({'version': '2.1.0', 'runs': [{'results': []}]} if '--sarif' in
         self.assertEqual(report["head"], run("git", "rev-parse", "HEAD", cwd=self.repo).stdout.strip())
         self.assertEqual(report["upstream_sha"], report["head"])
         self.assertEqual(report["config_sha256"], hashlib.sha256((self.repo / ".qlty" / "qlty.toml").read_bytes()).hexdigest())
+        self.assertEqual(report["commands"][2]["payload"], {
+            "invocations": [], "issues": [], "messages": [], "metadata": {"version": "0.644.0"},
+            "stats": [{"path": "app.py", "name": "main", "cyclomatic": 1, "complexity": 1}],
+        })
         self.assertEqual([item["args"] for item in report["commands"]], [
             ["qlty", "--no-upgrade-check", "check", "--no-fix", "--no-progress", "--upstream", report["upstream_sha"], "--sarif"],
             ["qlty", "--no-upgrade-check", "smells", "--upstream", report["upstream_sha"], "--no-snippets", "--sarif"],
@@ -150,6 +160,17 @@ print(json.dumps({'version': '2.1.0', 'runs': [{'results': []}]} if '--sarif' in
                                 env={"QLTY_BAD_RUNS": "1"})
         self.assertNotEqual(malformed.returncode, 0)
         self.assertTrue(all(not item["schema_valid"] for item in json.loads(malformed.stdout)["commands"]))
+        missing_driver = self.helper("scan", "--repo", str(self.repo), "--upstream", "main", check=False,
+                                     env={"QLTY_MISSING_DRIVER": "1"})
+        self.assertNotEqual(missing_driver.returncode, 0)
+        self.assertTrue(all(not item["schema_valid"] for item in json.loads(missing_driver.stdout)["commands"][:2]))
+        bare_stats = self.helper("scan", "--repo", str(self.repo), "--upstream", "main", check=False,
+                                 env={"QLTY_BARE_STATS": "1"})
+        self.assertNotEqual(bare_stats.returncode, 0)
+        self.assertFalse(json.loads(bare_stats.stdout)["commands"][2]["schema_valid"])
+        empty_stats = self.helper("scan", "--repo", str(self.repo), "--upstream", "main",
+                                  env={"QLTY_EMPTY_STATS": "1"})
+        self.assertEqual(json.loads(empty_stats.stdout)["status"], "ok")
         self.assertNotEqual(self.helper("scan", "--repo", str(self.repo), "--upstream", "missing", check=False).returncode, 0)
 
     def test_scan_rejects_output_inside_repo(self):
