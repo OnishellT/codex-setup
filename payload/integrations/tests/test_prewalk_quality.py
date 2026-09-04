@@ -50,6 +50,9 @@ if args == ['--no-upgrade-check', 'init', '--no']:
  sys.exit()
 if os.environ.get('QLTY_INVALID_JSON') and any(name in args for name in ('check', 'smells', 'metrics')):
  print('{not json'); sys.exit()
+if os.environ.get('QLTY_VOLATILE') and '--sarif' in args:
+ print('progress', file=sys.stderr)
+ print(json.dumps({'runs': [{'tool': {'driver': {'name': 'fake', 'notifications': [{'message': {'text': os.urandom(8).hex()}}]}}, 'invocations': [{'executionSuccessful': True, 'id': os.urandom(8).hex()}], 'results': []}]})); sys.exit()
 if 'smells' in args:
  print(json.dumps({'runs': [{'results': [{}] if os.environ.get('QLTY_SMELLS') else []}]})); sys.exit()
 if 'metrics' in args and os.environ.get('QLTY_METRICS_FAIL'): sys.exit(3)
@@ -140,6 +143,26 @@ print(json.dumps({'runs': []} if 'sarif' in args else {'functions': []}))
                              str(self.repo / "report.json"), check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse((self.repo / "report.json").exists())
+
+    def test_scan_normalizes_volatile_sarif_metadata(self):
+        self.helper("setup", "--repo", str(self.repo))
+        first = self.helper("scan", "--repo", str(self.repo), "--upstream", "main",
+                            env={"QLTY_VOLATILE": "1"}).stdout
+        second = self.helper("scan", "--repo", str(self.repo), "--upstream", "main",
+                             env={"QLTY_VOLATILE": "1"}).stdout
+        self.assertEqual(first, second)
+        report = json.loads(first)
+        for item in report["commands"][:2]:
+            run = item["payload"]["runs"][0]
+            self.assertNotIn("invocations", run)
+            self.assertNotIn("notifications", run["tool"]["driver"])
+            self.assertEqual(item["stderr"], "")
+
+    def test_scan_rejects_dirty_checkout(self):
+        self.helper("setup", "--repo", str(self.repo))
+        (self.repo / "untracked").write_text("keep\n")
+        result = self.helper("scan", "--repo", str(self.repo), "--upstream", "main", check=False)
+        self.assertNotEqual(result.returncode, 0)
 
 
 if __name__ == "__main__":

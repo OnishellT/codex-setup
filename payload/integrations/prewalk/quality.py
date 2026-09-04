@@ -130,9 +130,19 @@ def setup(args):
 
 def parsed(result):
     try:
-        return json.loads(result.stdout), True
+        return normalized(json.loads(result.stdout)), True
     except json.JSONDecodeError:
         return {"raw": result.stdout}, False
+
+
+def normalized(value, path=()):
+    if isinstance(value, dict):
+        return {key: normalized(item, path + (key,)) for key, item in value.items()
+                if not (key == "invocations" and path == ("runs",))
+                and not (key == "notifications" and path[-2:] == ("tool", "driver"))}
+    if isinstance(value, list):
+        return [normalized(item, path) for item in value]
+    return value
 
 
 def has_results(payload):
@@ -144,9 +154,10 @@ def has_results(payload):
 def command(executable, repo, args):
     result = qlty_run(executable, repo, *args)
     payload, json_valid = parsed(result)
+    status = "ok" if result.returncode == 0 and json_valid else "failed"
     return {"args": ["qlty", "--no-upgrade-check", *args], "json_valid": json_valid,
-            "payload": payload, "returncode": result.returncode, "status": "ok" if result.returncode == 0 and json_valid else "failed",
-            "stderr": result.stderr}
+            "payload": payload, "returncode": result.returncode, "status": status,
+            "stderr": result.stderr if status == "failed" else ""}
 
 
 def print_json(value, output=None):
@@ -169,6 +180,8 @@ def scan(args):
     repo = repository(args.repo)
     executable = qlty()
     output = output_path(args.output, repo)
+    if not clean(repo):
+        raise RuntimeError("el checkout debe estar limpio antes de escanear qlty")
     config = repo / ".qlty" / "qlty.toml"
     if not config.is_file():
         raise RuntimeError("falta .qlty/qlty.toml")
