@@ -46,10 +46,9 @@ def rewrite(event):
     rewritten = result.stdout.strip()
     if not rewritten or rewritten == command or "\x00" in rewritten:
         return None
-    if executable != "rtk":
-        if not re.match(r"^rtk(?:\s|$)", rewritten):
-            return None
-        rewritten = shlex.quote(executable) + rewritten[3:]
+    if not re.match(r"^rtk(?:\s|$)", rewritten):
+        return None
+    rewritten = shlex.quote(executable) + rewritten[3:]
     # Keep cwd, timeout and other tool input fields. Do not change approval or
     # sandbox settings; this is PreToolUse, never PermissionRequest.
     return {
@@ -62,15 +61,10 @@ def rewrite(event):
 
 
 def rtk_command():
-    """Prefer the installer's private binary; otherwise resolve normal PATH."""
+    """Use only the private binary next to this installed hook."""
     managed = Path(__file__).resolve().parent / "bin" / "rtk"
     if managed.is_file() and not managed.is_symlink() and os.access(managed, os.X_OK):
         return str(managed)
-    home = os.environ.get("CODEX_HOME")
-    if home:
-        managed = Path(home) / "integrations" / "rtk" / "bin" / "rtk"
-        if managed.is_file() and not managed.is_symlink() and os.access(managed, os.X_OK):
-            return str(managed)
     return None
 
 

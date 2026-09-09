@@ -46,6 +46,7 @@ type dependencyRequirement struct {
 }
 
 const (
+	commandAptGet    = "apt-get"
 	depTmux          = "tmux >= 3.3"
 	depTic           = "tic (ncurses)"
 	depNode18        = "node >= 18"
@@ -261,7 +262,7 @@ func packageManager() (packageManagerInfo, error) {
 		if !anyToken(id, candidate.ids) {
 			continue
 		}
-		command := map[string]string{"apt": "apt-get", "dnf": "dnf", "pacman": "pacman"}[candidate.family]
+		command := map[string]string{"apt": commandAptGet, "dnf": "dnf", "pacman": "pacman"}[candidate.family]
 		path, err := dependencyManagerPath(command)
 		if err == nil {
 			return packageManagerInfo{path, candidate.family}, nil
@@ -298,7 +299,7 @@ func supportedDistroVersion(id, version string) bool {
 
 func secureManagerPath(name string) (string, error) {
 	switch name {
-	case "apt-get", "dnf", "pacman", "sudo":
+	case commandAptGet, "dnf", "pacman", "sudo":
 	default:
 		return "", errors.New("gestor nativo no permitido")
 	}
@@ -451,7 +452,7 @@ func allowlistedDependencyCommand(c DependencyCommand) bool {
 		name = filepath.Base(c.Path)
 	}
 	switch name {
-	case "apt-get", "dnf", "pacman":
+	case commandAptGet, "dnf", "pacman":
 		path, err := dependencyManagerPath(name)
 		return err == nil && path == c.Path && len(c.Args) != 0
 	default:

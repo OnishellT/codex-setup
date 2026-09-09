@@ -29,6 +29,18 @@ ponytail = load("ponytail_runner", ROOT / "ponytail" / "runner.py")
 
 
 class RTKTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory(prefix="rtk-fixture-")
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        self.binary = root / "bin" / "rtk"
+        self.binary.parent.mkdir()
+        self.binary.write_text("#!/bin/sh\nexit 1\n")
+        self.binary.chmod(0o755)
+        source = patch.object(rtk, "__file__", str(root / "hook.py"))
+        source.start()
+        self.addCleanup(source.stop)
+
     def event(self, command="git status --short"):
         return {"hook_event_name": "PreToolUse", "tool_name": "Bash",
                 "tool_input": {"command": command, "cwd": "/tmp/example", "timeout_ms": 9000}}
@@ -41,9 +53,9 @@ class RTKTests(unittest.TestCase):
         self.assertEqual(output["permissionDecision"], "allow")
         self.assertEqual(output["updatedInput"]["cwd"], "/tmp/example")
         self.assertEqual(output["updatedInput"]["timeout_ms"], 9000)
-        self.assertTrue(output["updatedInput"]["command"].startswith("rtk git"))
+        self.assertTrue(output["updatedInput"]["command"].startswith(shlex.quote(str(self.binary)) + " git"))
         self.assertEqual(event["tool_input"]["command"], "git status; printf '%s' '$SECRET'")
-        self.assertEqual(run.call_args.args[0], ["rtk", "rewrite", "--", event["tool_input"]["command"]])
+        self.assertEqual(run.call_args.args[0], [str(self.binary), "rewrite", "--", event["tool_input"]["command"]])
         self.assertNotIn("shell", run.call_args.kwargs)
         self.assertEqual(run.call_args.kwargs["timeout"], 2)
 
@@ -114,14 +126,22 @@ class RTKTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("rtk"), "RTK not installed")
     def test_actual_rtk_parser_respects_permission_exit(self):
-        with patch.dict(os.environ, {"RTK_DISABLED": "0"}):
+        executable = shutil.which("rtk")
+        with patch.dict(os.environ, {"RTK_DISABLED": "0"}), patch.object(rtk, "rtk_command", return_value=executable):
             direct = subprocess.run(["rtk", "rewrite", "--", "git status --short"], capture_output=True, text=True)
             output = rtk.rewrite(self.event())
             if direct.returncode == 0:
-                self.assertEqual(output["hookSpecificOutput"]["updatedInput"]["command"], "rtk git status --short")
+                self.assertEqual(output["hookSpecificOutput"]["updatedInput"]["command"], shlex.quote(executable) + " git status --short")
             else:
                 self.assertIsNone(output)
             self.assertIsNone(rtk.rewrite(self.event("-h")))
+
+    def test_path_binary_cannot_replace_missing_managed_runtime(self):
+        with patch.object(rtk, "__file__", str(self.binary.parent / "missing" / "hook.py")), \
+                patch.dict(os.environ, {"PATH": str(self.binary.parent)}), \
+                patch.object(rtk.subprocess, "run") as run:
+            self.assertIsNone(rtk.rewrite(self.event()))
+            run.assert_not_called()
 
 
 @unittest.skipUnless(shutil.which("node"), "Node.js not installed")

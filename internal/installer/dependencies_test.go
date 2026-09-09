@@ -124,7 +124,7 @@ func fakePackageManagers(t *testing.T) string {
 	t.Cleanup(func() { dependencyManagerPath = old })
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	for _, name := range []string{"apt-get", "pacman", "sudo"} {
+	for _, name := range []string{commandAptGet, "pacman", "sudo"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -180,7 +180,7 @@ func runFakeDependencyCase(t *testing.T, success, creates bool) {
 	if !success {
 		body += "exit 1\n"
 	}
-	if err := os.WriteFile(filepath.Join(dir, "apt-get"), []byte(body+"exit 0\n"), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, commandAptGet), []byte(body+"exit 0\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "sudo"), []byte("#!/bin/sh\nexec \"$@\"\n"), 0755); err != nil {
@@ -207,11 +207,11 @@ func TestDependencyCommandValidatesInnerManager(t *testing.T) {
 		args    []string
 		allowed bool
 	}{
-		{filepath.Join(dir, "sudo"), []string{filepath.Join(dir, "apt-get"), "update"}, true},
+		{filepath.Join(dir, "sudo"), []string{filepath.Join(dir, commandAptGet), "update"}, true},
 		{filepath.Join(dir, "sudo"), []string{"/writable/apt-get", "update"}, false},
 		{filepath.Join(dir, "sudo"), []string{filepath.Join(dir, "sudo"), "sh"}, false},
-		{"/writable/sudo", []string{filepath.Join(dir, "apt-get"), "update"}, false},
-		{filepath.Join(dir, "apt-get"), []string{"update"}, true},
+		{"/writable/sudo", []string{filepath.Join(dir, commandAptGet), "update"}, false},
+		{filepath.Join(dir, commandAptGet), []string{"update"}, true},
 	} {
 		if got := allowlistedDependencyCommand(DependencyCommand{Path: tc.path, Args: tc.args}); got != tc.allowed {
 			t.Errorf("%+v allowed=%v", tc, got)
@@ -221,11 +221,11 @@ func TestDependencyCommandValidatesInnerManager(t *testing.T) {
 
 func TestSecureManagerIgnoresPATH(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "apt-get"), []byte("#!/bin/sh\nexit 99\n"), 0755); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, commandAptGet), []byte("#!/bin/sh\nexit 99\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", dir)
-	path, err := secureManagerPath("apt-get")
+	path, err := secureManagerPath(commandAptGet)
 	if err == nil && path != "/usr/bin/apt-get" {
 		t.Fatalf("accepted PATH manager %q", path)
 	}
