@@ -16,6 +16,8 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+const testFallbackModel = "gpt-5.6-luna"
+
 func testEngine(t *testing.T) *installer.Engine {
 	t.Helper()
 	data, err := fs.Sub(assets, "payload")
@@ -302,9 +304,9 @@ func TestPackagedPrewalkDefaultsToNativeCodex(t *testing.T) {
 	}
 	for name, want := range map[string][2]string{
 		"explorer":          {"gpt-5.3-codex-spark", "medium"},
-		"fallback_explorer": {"gpt-5.3-codex-spark", "medium"},
+		"fallback_explorer": {testFallbackModel, "medium"},
 		"critical_explorer": {"gpt-5.3-codex-spark", "medium"},
-		"fallback_executor": {"gpt-5.3-codex-spark", "medium"},
+		"fallback_executor": {testFallbackModel, "medium"},
 	} {
 		got := readConfig("agents/" + name + ".toml")
 		if got["model"] != want[0] || got["model_reasoning_effort"] != want[1] || got["agents"].(map[string]any)["enabled"] != false {
@@ -435,7 +437,7 @@ func TestPackagedFallbackExecutorMigratesGeneratedInstructions(t *testing.T) {
 	if err = toml.Unmarshal(data, &role); err != nil {
 		t.Fatal(err)
 	}
-	if role["developer_instructions"] != wanted || role["model"] != "gpt-5.3-codex-spark" {
+	if role["developer_instructions"] != wanted || role["model"] != testFallbackModel {
 		t.Fatal("fallback migration did not apply the native preset and current instructions")
 	}
 }

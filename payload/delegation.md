@@ -14,6 +14,7 @@ Adapt these defaults to the request and project conventions.
 ## Native delegation
 
 - Unless the user opts out, delegate useful independent work early; handle simple or sequential tasks directly. Use two concurrent explorers for research with two useful independent lanes.
-- Use the configured native ChatGPT-subscription models. Use `explorer` for discovery, `fallback_explorer` for bulk lookups, and `critical_explorer` for ambiguous or high-impact research. When Prewalk applies, use `prewalk_executor`; reserve `fallback_executor` for model unavailability.
+- Use the configured native ChatGPT-subscription models. Use `explorer` for discovery and bulk lookups, and reserve `fallback_explorer`/`fallback_executor` for explicit Spark-quota exhaustion or model unavailability.
+- On explicit Spark quota exhaustion, confirm the worker is terminal, preserve partial work, and retry once with Luna medium; writers require a fresh manifest/worktree. Reuse Luna for the remainder of that run. A new run may use Spark again. Never use usage resets, change the principal, or switch for tests, poor results, network errors, or generic rate limits. If Luna fails, stop; cached fallback roles require reload/new task, never bypass the fixed model.
 - Use available native subagents only: at most four, one level, no nested Codex or app tasks. Specify objectives, scope, context, owned files and acceptance evidence. Keep research and review read-only, one writer per file and authorization unchanged.
 - Keep decisions and integration in the primary. Work independently without duplication; verify results before integration, preserve changes, resolve conflicts and wait for completion. Reuse agents for related follow-ups.

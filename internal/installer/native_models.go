@@ -18,6 +18,9 @@ type ModelChoice struct {
 	Effort string `json:"effort"`
 }
 
+const modelLuna = "gpt-5.6-luna"
+const modelAstra = "gpt-6-astra"
+
 type ModelOption struct {
 	Model   string
 	Efforts []string
@@ -26,7 +29,7 @@ type ModelOption struct {
 type ModelRole struct{ ID, Label string }
 
 var ModelRoles = []ModelRole{
-	{"principal", "Principal (fijo)"}, {"default", "Subagente genérico"},
+	{"principal", "Principal"}, {"default", "Subagente genérico"},
 	{"explorer", "Explorador"}, {"fallback_explorer", "Explorador de respaldo"},
 	{"critical_explorer", "Exploración crítica"}, {"prewalk_executor", "Implementador"},
 	{"fallback_executor", "Implementador de respaldo"}, {"engineering_reviewer", "Reviewer"},
@@ -37,7 +40,8 @@ func DefaultModelChoices() map[string]ModelChoice {
 	for _, role := range ModelRoles {
 		out[role.ID] = ModelChoice{"gpt-5.3-codex-spark", "medium"}
 	}
-	out["principal"] = ModelChoice{"gpt-6-astra", "medium"}
+	out["fallback_explorer"], out["fallback_executor"] = ModelChoice{modelLuna, "medium"}, ModelChoice{modelLuna, "medium"}
+	out["principal"] = ModelChoice{modelAstra, "medium"}
 	out["engineering_reviewer"] = ModelChoice{"gpt-5.6-sol", "xhigh"}
 	return out
 }
@@ -46,8 +50,9 @@ var nativeOptions = sync.OnceValue(func() []ModelOption {
 	// Offline defaults match the preset. Prefer metadata shipped by the local
 	// Codex binary; never contact a gateway or copy a provider's catalogue.
 	out := []ModelOption{
-		{"gpt-6-astra", []string{"low", "medium", "high", "xhigh", "max", "ultra"}},
+		{modelAstra, []string{"low", "medium", "high", "xhigh", "max", "ultra"}},
 		{"gpt-5.6-sol", []string{"low", "medium", "high", "xhigh", "max", "ultra"}},
+		{modelLuna, []string{"low", "medium", "high", "xhigh", "max"}},
 		{"gpt-5.3-codex-spark", []string{"low", "medium", "high", "xhigh"}},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -104,16 +109,17 @@ func NativeModelOptions() []ModelOption {
 }
 
 func (e *Engine) BuildPlanWithModels(ids []string, choices map[string]ModelChoice) (*Plan, error) {
+	return e.buildPlanWithOptions(ids, choices, NativeModelOptions())
+}
+
+func (e *Engine) buildPlanWithOptions(ids []string, choices map[string]ModelChoice, options []ModelOption) (*Plan, error) {
 	copy := DefaultModelChoices()
 	for id, choice := range choices {
 		if _, ok := copy[id]; !ok {
 			return nil, fmt.Errorf("rol desconocido: %s", id)
 		}
-		if id == "principal" && choice != copy[id] {
-			return nil, fmt.Errorf("el principal es gpt-6-astra/medium; configura los subagentes")
-		}
 		valid := false
-		for _, option := range NativeModelOptions() {
+		for _, option := range options {
 			if option.Model == choice.Model && hasString(option.Efforts, choice.Effort) {
 				valid = true
 				break

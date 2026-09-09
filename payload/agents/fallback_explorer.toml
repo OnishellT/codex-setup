@@ -1,6 +1,6 @@
 name = "fallback_explorer"
 description = "Explorador read-only de respaldo para búsquedas simples o masivas."
-model = "gpt-5.3-codex-spark"
+model = "gpt-5.6-luna"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 developer_instructions = """

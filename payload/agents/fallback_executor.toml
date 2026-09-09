@@ -1,6 +1,6 @@
 name = "fallback_executor"
 description = "Ejecuta un plan aprobado sólo cuando el modelo del prewalk_executor no está disponible."
-model = "gpt-5.3-codex-spark"
+model = "gpt-5.6-luna"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
