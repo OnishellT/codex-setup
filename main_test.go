@@ -517,27 +517,24 @@ func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	deps := t.TempDir()
-	pkg := filepath.Join(deps, "modules", "@zvec", "zvec-grep")
-	if err := os.MkdirAll(filepath.Join(pkg, "dist", "cli"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
+	e := testEngine(t)
+	runtimeDir := filepath.Join(e.CodexHome, "integrations", "zg")
+	node := filepath.Join(runtimeDir, "node-v22.23.2", "bin", "node")
+	pkg := filepath.Join(runtimeDir, "packages-v0.2.1", "node_modules", "@zvec", "zvec-grep")
 	for name, content := range map[string]string{
-		filepath.Join(pkg, "package.json"):            `{"name":"@zvec/zvec-grep","version":"0.2.1","bin":{"zg":"dist/cli/index.js"}}`,
-		filepath.Join(pkg, "dist", "cli", "index.js"): "#!/bin/sh\nexit 1\n",
-		filepath.Join(deps, "node"):                   "#!/bin/sh\ncase \"$1\" in\n--version) echo v24.0.0;;\n--input-type=module) echo patched;;\n*) exec " + quote(realNode) + " \"$@\";;\nesac\n",
-		filepath.Join(deps, "npm"):                    "#!/bin/sh\nprintf '%s\\n' " + quote(filepath.Join(deps, "modules")) + "\n",
+		filepath.Join(pkg, "package.json"):                                                            `{"name":"@zvec/zvec-grep","version":"0.2.1","bin":{"zg":"dist/cli/index.js"}}`,
+		filepath.Join(pkg, "dist", "cli", "index.js"):                                                 "cli",
+		filepath.Join(pkg, "dist", "daemon", "watch-manager.js"):                                      "watch",
+		filepath.Join(runtimeDir, "node-v22.23.2", "lib", "node_modules", "npm", "bin", "npm-cli.js"): "npm",
+		node: "#!/bin/sh\nif [ \"$1\" = --version ]; then echo v22.23.2; elif [ \"$2\" = --version ]; then echo 10.9.8; elif [ \"$4\" = check ]; then echo patched; else echo ready; fi\n",
 	} {
+		if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
+			t.Fatal(err)
+		}
 		if err := os.WriteFile(name, []byte(content), 0755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.Symlink(filepath.Join(pkg, "dist", "cli", "index.js"), filepath.Join(deps, "zg")); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", deps+string(os.PathListSeparator)+os.Getenv("PATH"))
-	e := testEngine(t)
 	var zg installer.Module
 	for _, module := range e.Modules {
 		if module.ID == "zg" {
@@ -585,12 +582,12 @@ func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
 		t.Fatalf("zg replaced an existing MCP server: %#v", mcp)
 	}
 	server := mcp["zvec_grep"].(map[string]any)
-	if server["command"] != "zg" || server["enabled"] != true || server["required"] != false || server["default_tools_approval_mode"] != "auto" || server["startup_timeout_sec"] != int64(30) || server["tool_timeout_sec"] != int64(120) {
+	if server["command"] != node || server["enabled"] != true || server["required"] != false || server["default_tools_approval_mode"] != "auto" || server["startup_timeout_sec"] != int64(30) || server["tool_timeout_sec"] != int64(120) {
 		t.Fatalf("unexpected zg server configuration: %#v", server)
 	}
 	args := server["args"].([]any)
 	tools := server["enabled_tools"].([]any)
-	if strings.Join([]string{args[0].(string), args[1].(string), args[2].(string), args[3].(string)}, " ") != "server --stdio --mcp-toolset agent" || len(tools) != 1 || tools[0] != "zvec_grep_search" {
+	if len(args) != 5 || args[0] != filepath.Join(pkg, "dist", "cli", "index.js") || strings.Join([]string{args[1].(string), args[2].(string), args[3].(string), args[4].(string)}, " ") != "server --stdio --mcp-toolset agent" || len(tools) != 1 || tools[0] != "zvec_grep_search" {
 		t.Fatalf("zg exposes unexpected command or tools: %#v", server)
 	}
 	if _, found := server["env"]; found {
@@ -623,7 +620,7 @@ func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
 	if _, err := os.Stat(helper); err != nil {
 		t.Fatalf("zg patch helper was not installed: %v", err)
 	}
-	cmd := exec.Command("node", "--test", filepath.Join(e.CodexHome, "integrations", "zg", "test-pr86.mjs"))
+	cmd := exec.Command(realNode, "--test", filepath.Join(e.CodexHome, "integrations", "zg", "test-pr86.mjs"))
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("installed zg patch helper tests: %v\n%s", err, out)
 	}

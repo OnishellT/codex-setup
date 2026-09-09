@@ -48,9 +48,11 @@ func TestReadinessFilesRequiresEveryRegularChild(t *testing.T) {
 }
 
 func TestReadinessUsesInstalledAccountChoices(t *testing.T) {
-	e := &Engine{CodexHome: t.TempDir(), Modules: []Module{{ID: "base", Operations: []Operation{{Kind: "native-config", Root: "codex", Target: "config.toml"}}}}}
-	status := &AccountStatus{Models: []ModelOption{{Model: "account-specific", Efforts: []string{"high"}}}}
-	path := filepath.Join(e.CodexHome, "config.toml")
+	const configName = "config.toml"
+	const accountModel = "account-specific"
+	e := &Engine{CodexHome: t.TempDir(), Modules: []Module{{ID: "base", Operations: []Operation{{Kind: "native-config", Root: "codex", Target: configName}}}}}
+	status := &AccountStatus{Models: []ModelOption{{Model: accountModel, Efforts: []string{"high"}}}}
+	path := filepath.Join(e.CodexHome, configName)
 	write := func(generic string) {
 		t.Helper()
 		data := "model='account-specific'\nmodel_reasoning_effort='high'\n[agents]\ndefault_subagent_model='" + generic + "'\ndefault_subagent_reasoning_effort='high'\n"
@@ -58,7 +60,7 @@ func TestReadinessUsesInstalledAccountChoices(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("account-specific")
+	write(accountModel)
 	r, err := e.CheckReadiness([]string{"base"}, status)
 	if err != nil || !r.Ready() {
 		t.Fatalf("non-default available choice rejected: %#v %v", r, err)
@@ -69,7 +71,7 @@ func TestReadinessUsesInstalledAccountChoices(t *testing.T) {
 	if err != nil || r.Ready() {
 		t.Fatal("unavailable default accepted")
 	}
-	write("account-specific")
+	write(accountModel)
 	r, err = e.CheckReadiness([]string{"base"}, nil)
 	if err != nil || r.Ready() {
 		t.Fatal("missing account accepted")
@@ -81,7 +83,7 @@ func TestReadinessUsesInstalledAccountChoices(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(filepath.Join(t.TempDir(), "config.toml"), path); err != nil {
+	if err := os.Symlink(filepath.Join(t.TempDir(), configName), path); err != nil {
 		t.Fatal(err)
 	}
 	r, err = e.CheckReadiness([]string{"base"}, status)

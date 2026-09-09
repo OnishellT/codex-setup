@@ -26,7 +26,7 @@ func readableInstalledFile(path string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	_, err = file.Read(make([]byte, 1))
 	if err == io.EOF {
 		return nil
@@ -36,23 +36,7 @@ func readableInstalledFile(path string) error {
 
 func (e *Engine) checkInstalledOperation(op Operation) error {
 	if op.Kind == "tree" {
-		return fs.WalkDir(e.assets, op.Source, func(source string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if entry.IsDir() {
-				return nil
-			}
-			rel, err := filepath.Rel(op.Source, source)
-			if err != nil {
-				return err
-			}
-			target, err := e.target(op.Root, filepath.Join(op.Target, rel))
-			if err != nil {
-				return err
-			}
-			return readableInstalledFile(target)
-		})
+		return e.checkInstalledTree(op)
 	}
 	switch op.Kind {
 	case "copy", "copy-if-missing", "template-copy", "agent-instructions", "qlty-install", "prewalk-settings", "merge", "append", "developer-instructions", "native-config", "prewalk-config", "hooks-state":
@@ -63,6 +47,26 @@ func (e *Engine) checkInstalledOperation(op Operation) error {
 		return readableInstalledFile(target)
 	}
 	return nil
+}
+
+func (e *Engine) checkInstalledTree(op Operation) error {
+	return fs.WalkDir(e.assets, op.Source, func(source string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(op.Source, source)
+		if err != nil {
+			return err
+		}
+		target, err := e.target(op.Root, filepath.Join(op.Target, rel))
+		if err != nil {
+			return err
+		}
+		return readableInstalledFile(target)
+	})
 }
 
 func (e *Engine) checkInstalledFiles(modules []Module) []string {
@@ -97,11 +101,7 @@ func installedModelConfig(path string) (map[string]any, error) {
 	return c, nil
 }
 
-func (e *Engine) checkInstalledModels(status *AccountStatus, modules []Module) []string {
-	if status == nil || len(status.Models) == 0 {
-		return []string{"cuenta: catálogo no verificado"}
-	}
-	// Models are only configured by native-config (base/agents), not by standalone hooks.
+func configuredModelRoles(modules []Module) (bool, bool) {
 	native, prewalk := false, false
 	for _, m := range modules {
 		prewalk = prewalk || m.ID == "prewalk"
@@ -109,6 +109,15 @@ func (e *Engine) checkInstalledModels(status *AccountStatus, modules []Module) [
 			native = native || op.Kind == "native-config"
 		}
 	}
+	return native, prewalk
+}
+
+func (e *Engine) checkInstalledModels(status *AccountStatus, modules []Module) []string {
+	if status == nil || len(status.Models) == 0 {
+		return []string{"cuenta: catálogo no verificado"}
+	}
+	// Models are only configured by native-config (base/agents), not by standalone hooks.
+	native, prewalk := configuredModelRoles(modules)
 	if !native && !prewalk {
 		return nil
 	}
