@@ -11,7 +11,7 @@ func TestZGNodeFilesExtractsRequiredRegularFiles(t *testing.T) {
 	var b bytes.Buffer
 	gz := gzip.NewWriter(&b)
 	tw := tar.NewWriter(gz)
-	files := []struct{ name, data string }{{"node-v22/bin/node", "node"}, {"node-v22/lib/node_modules/npm/npm-cli.js", "npm"}}
+	files := []struct{ name, data string }{{"node-v22/bin/node", "node"}, {"node-v22/lib/node_modules/npm/bin/npm-cli.js", "npm"}}
 	for _, f := range files {
 		if err := tw.WriteHeader(&tar.Header{Name: f.name, Typeflag: tar.TypeReg, Size: int64(len(f.data))}); err != nil {
 			t.Fatal(err)

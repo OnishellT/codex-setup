@@ -18,7 +18,7 @@ import (
 )
 
 const zgNodeVersion = "22.23.2"
-const zgNodeMaxDownload = 80 << 20
+const zgNodeMaxDownload = 256 << 20
 
 var zgNodeClient = &http.Client{Timeout: 2 * time.Minute}
 var zgNodeAssets = map[string]string{"amd64": "node-v22.23.2-linux-x64.tar.gz", "arm64": "node-v22.23.2-linux-arm64.tar.gz"}
@@ -28,7 +28,7 @@ func (e *Engine) managedZGNode() string {
 	return filepath.Join(e.CodexHome, "integrations", "zg", "node-v"+zgNodeVersion, "bin", "node")
 }
 func (e *Engine) managedZGNPM() string {
-	return filepath.Join(filepath.Dir(filepath.Dir(e.managedZGNode())), "lib", "node_modules", "npm", "npm-cli.js")
+	return filepath.Join(filepath.Dir(e.managedZGNode()), "npm", "npm-cli.js")
 }
 
 func (e *Engine) installZGNode(stdout io.Writer) error {
@@ -93,7 +93,7 @@ func (e *Engine) installZGNode(stdout io.Writer) error {
 		return err
 	}
 	defer os.Remove(name + ".npm")
-	if !validVersionBinary(name, "22") {
+	if !validExactNode(name) {
 		return errors.New("binario Node descargado no supera la verificación")
 	}
 	if _, err = os.Stat(e.managedZGNode()); err == nil {
@@ -114,6 +114,11 @@ func (e *Engine) installZGNode(stdout io.Writer) error {
 		_, _ = io.WriteString(stdout, "Node gestionado instalado en "+e.managedZGNode()+"\n")
 	}
 	return nil
+}
+
+func validExactNode(path string) bool {
+	out, err := run(5*time.Second, path, "--version")
+	return err == nil && strings.TrimSpace(out) == "v"+zgNodeVersion
 }
 
 func validVersionBinary(path, major string) bool {
@@ -142,11 +147,14 @@ func zgNodeFiles(data []byte) ([]byte, []byte, error) {
 		}
 		base := filepath.ToSlash(h.Name)
 		if strings.HasSuffix(base, "/bin/node") {
-			node, err = io.ReadAll(io.LimitReader(tr, 32<<20))
+			if h.Size > 128<<20 {
+				return nil, nil, errors.New("binario Node excede tamaño permitido")
+			}
+			node, err = io.ReadAll(io.LimitReader(tr, 128<<20))
 			if err != nil {
 				return nil, nil, err
 			}
-		} else if strings.HasSuffix(base, "/lib/node_modules/npm/npm-cli.js") {
+		} else if strings.HasSuffix(base, "/lib/node_modules/npm/bin/npm-cli.js") {
 			npm, err = io.ReadAll(io.LimitReader(tr, 8<<20))
 			if err != nil {
 				return nil, nil, err
