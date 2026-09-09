@@ -481,7 +481,7 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 					return nil, err
 				}
 			case "qlty-install":
-				if err = e.planQltyInstall(target, get, put); err != nil {
+				if err = checkInstalledQlty(target); err != nil {
 					return nil, err
 				}
 			case "native-config":

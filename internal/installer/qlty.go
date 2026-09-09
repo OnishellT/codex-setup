@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -57,33 +58,70 @@ var (
 	qltyExtract        = extractQlty
 )
 
-func (e *Engine) planQltyInstall(target string, get func(string) (*Change, error), put func(string, []byte, os.FileMode) error) error {
+func (e *Engine) managedQlty() string {
+	return filepath.Join(e.CodexHome, "integrations", "prewalk", "bin", "qlty")
+}
+
+func (e *Engine) qltyAvailable() bool { return checkInstalledQlty(e.managedQlty()) == nil }
+
+// installQlty is reached only from InstallDependencies, after explicit consent.
+func (e *Engine) installQlty(stdout io.Writer) error {
 	release, ok := qltyReleases[qltyPlatform()]
 	if !ok {
 		return fmt.Errorf("Qlty %s no está disponible para %s", qltyVersion, qltyPlatform())
 	}
-	current, err := get(target)
+	target := e.managedQlty()
+	if err := checkPath(target); err != nil {
+		return err
+	}
+	if e.qltyAvailable() {
+		return nil
+	}
+	binary, err := downloadQltyBinary(release)
 	if err != nil {
 		return err
 	}
-	if current.existed && sha256Hex(current.original) == release.binarySHA256 {
-		if current.mode == 0755 {
-			return nil
-		}
-		return put(target, current.original, 0755)
+	dir := filepath.Dir(target)
+	if err := checkPath(dir); err != nil {
+		return err
 	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	if err := ensurePrivateDir(dir); err != nil {
+		return err
+	}
+	change := Change{Path: target, data: binary, mode: 0755, originalMode: 0755}
+	if old, err := os.ReadFile(target); err == nil {
+		change.existed, change.original = true, old
+		if info, statErr := os.Stat(target); statErr == nil {
+			change.originalMode = writableMode(info.Mode())
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if _, err := e.Apply(&Plan{owner: e, Changes: []Change{change}}, nil); err != nil {
+		return err
+	}
+	if stdout != nil {
+		_, _ = io.WriteString(stdout, "Qlty gestionado instalado en "+target+"\n")
+	}
+	return nil
+}
+
+func downloadQltyBinary(release qltyRelease) ([]byte, error) {
 	archive, err := downloadQlty(release)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	binary, err := qltyExtract(archive, release)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if sha256Hex(binary) != release.binarySHA256 {
-		return errors.New("Qlty descargado: el binario extraído no coincide con el checksum esperado")
+	if len(binary) == 0 || len(binary) > qltyMaxBinarySize || sha256Hex(binary) != release.binarySHA256 {
+		return nil, errors.New("qlty descargado: el binario extraído no coincide con el checksum esperado")
 	}
-	return put(target, binary, 0755)
+	return binary, nil
 }
 
 func downloadQlty(release qltyRelease) ([]byte, error) {

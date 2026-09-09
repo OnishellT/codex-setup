@@ -54,6 +54,7 @@ const (
 	depPython        = "python3"
 	depPythonModules = "python curses/sqlite3/tomllib/fcntl"
 	depCA            = "ca-certificates"
+	depQlty          = "qlty CLI >= " + qltyVersion
 )
 
 func (e *Engine) PlanDependencies(ids []string) (*DependencyPlan, error) {
@@ -70,12 +71,16 @@ func (e *Engine) PlanDependencies(ids []string) (*DependencyPlan, error) {
 	reqs := selectedRequirements(modules)
 	p := &DependencyPlan{owner: e, ids: append([]string(nil), ids...)}
 	for _, req := range reqs {
-		satisfied := dependencySatisfied(req)
-		if req.binary == "rtk" {
+		var satisfied bool
+		switch req.name {
+		case "rtk":
 			satisfied = e.rtkAvailable()
-		}
-		if req.name == depZG {
+		case depZG:
 			satisfied = e.checkZG() == nil
+		case depQlty:
+			satisfied = e.qltyAvailable()
+		default:
+			satisfied = dependencySatisfied(req)
 		}
 		if satisfied {
 			continue
@@ -96,6 +101,9 @@ func (e *Engine) PlanDependencies(ids []string) (*DependencyPlan, error) {
 	if contains(p.Missing, depZG) {
 		p.Warnings = append(p.Warnings, "zg descargará Node y el paquete verificados en CODEX_HOME/integrations/zg; no crea modelos ni índices.")
 	}
+	if contains(p.Missing, depQlty) {
+		p.Warnings = append(p.Warnings, "Qlty "+qltyVersion+" se descargará y verificará en CODEX_HOME/integrations/prewalk/bin/qlty tras tu consentimiento.")
+	}
 	p.signature = dependencySignature(p)
 	return p, nil
 }
@@ -103,7 +111,7 @@ func (e *Engine) PlanDependencies(ids []string) (*DependencyPlan, error) {
 func dependencyCommands(missing []string) ([]DependencyCommand, error) {
 	packageMissing := make([]string, 0, len(missing))
 	for _, item := range missing {
-		if item != "rtk" && item != depZG {
+		if item != "rtk" && item != depZG && item != depQlty {
 			packageMissing = append(packageMissing, item)
 		}
 	}
@@ -159,6 +167,7 @@ func selectedRequirements(modules []Module) []dependencyRequirement {
 			add(dependencyRequirement{"tar", "tar", ""})
 			add(dependencyRequirement{"xz", "xz", ""})
 			add(dependencyRequirement{depCA, depCA, ""})
+			add(dependencyRequirement{depQlty, "qlty", qltyVersion})
 		case "ponytail":
 			add(dependencyRequirement{depPython, "python3", "3.11"})
 			add(dependencyRequirement{depNode18, "node", "18"})
@@ -175,7 +184,7 @@ func selectedRequirements(modules []Module) []dependencyRequirement {
 		}
 	}
 	out := make([]dependencyRequirement, 0, len(seen))
-	for _, req := range []dependencyRequirement{{depPython, "python3", "3.11"}, {depPythonModules, "python3", "3.11"}, {"git", "git", ""}, {"tar", "tar", ""}, {"xz", "xz", ""}, {depCA, depCA, ""}, {depTmux, "tmux", "3.3"}, {depTic, "tic", ""}, {depNode18, "node", "18"}, {depZG, "", ""}, {"rtk", "rtk", "0.23"}} {
+	for _, req := range []dependencyRequirement{{depPython, "python3", "3.11"}, {depPythonModules, "python3", "3.11"}, {"git", "git", ""}, {"tar", "tar", ""}, {"xz", "xz", ""}, {depCA, depCA, ""}, {depTmux, "tmux", "3.3"}, {depTic, "tic", ""}, {depNode18, "node", "18"}, {depZG, "", ""}, {"rtk", "rtk", "0.23"}, {depQlty, "qlty", qltyVersion}} {
 		if seen[req.name] {
 			out = append(out, req)
 		}
@@ -428,6 +437,11 @@ func (e *Engine) InstallDependencies(p *DependencyPlan, stdin io.Reader, stdout,
 	}
 	if contains(p.Missing, depZG) {
 		if err := e.installZG(stdout, stderr); err != nil {
+			return err
+		}
+	}
+	if contains(p.Missing, depQlty) {
+		if err := e.installQlty(stdout); err != nil {
 			return err
 		}
 	}
