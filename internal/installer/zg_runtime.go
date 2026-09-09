@@ -4,8 +4,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -18,7 +16,8 @@ import (
 )
 
 const zgNodeVersion = "22.23.2"
-const zgNodeMaxDownload = 256 << 20
+const zgNodeMaxDownload = 80 << 20
+const zgNPMRelative = "lib/node_modules/npm/bin/npm-cli.js"
 
 var zgNodeClient = &http.Client{Timeout: 2 * time.Minute}
 var zgNodeAssets = map[string]string{"amd64": "node-v22.23.2-linux-x64.tar.gz", "arm64": "node-v22.23.2-linux-arm64.tar.gz"}
@@ -28,141 +27,156 @@ func (e *Engine) managedZGNode() string {
 	return filepath.Join(e.CodexHome, "integrations", "zg", "node-v"+zgNodeVersion, "bin", "node")
 }
 func (e *Engine) managedZGNPM() string {
-	return filepath.Join(filepath.Dir(e.managedZGNode()), "npm", "npm-cli.js")
+	return filepath.Join(filepath.Dir(filepath.Dir(e.managedZGNode())), zgNPMRelative)
 }
 
 func (e *Engine) installZGNode(stdout io.Writer) error {
-	if runtime.GOOS != "linux" {
-		return errors.New("Node gestionado de zg solo está disponible en Linux")
-	}
 	asset, ok := zgNodeAssets[runtime.GOARCH]
-	if !ok {
-		return fmt.Errorf("Node gestionado no soportado en %s", runtime.GOARCH)
+	if runtime.GOOS != "linux" || !ok {
+		return errors.New("Node gestionado requiere Linux amd64/arm64")
 	}
-	resp, err := zgNodeClient.Get("https://nodejs.org/dist/v" + zgNodeVersion + "/" + asset)
-	if err != nil {
+	destination := filepath.Dir(filepath.Dir(e.managedZGNode()))
+	if err := checkPath(destination); err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("descarga Node devolvió HTTP %s", resp.Status)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, zgNodeMaxDownload+1))
-	if err != nil {
-		return err
-	}
-	if len(data) > zgNodeMaxDownload {
-		return errors.New("archivo Node excede tamaño permitido")
-	}
-	h := sha256.Sum256(data)
-	if hex.EncodeToString(h[:]) != zgNodeHashes[runtime.GOARCH] {
-		return errors.New("checksum Node no coincide")
-	}
-	node, npm, err := zgNodeFiles(data)
-	if err != nil {
-		return err
-	}
-	base := filepath.Dir(filepath.Dir(e.managedZGNode()))
-	if err := checkPath(base); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(e.managedZGNode()), 0700); err != nil {
-		return err
-	}
-	for _, path := range []string{e.managedZGNode(), e.managedZGNPM()} {
-		if info, statErr := os.Lstat(path); statErr == nil && !info.Mode().IsRegular() {
-			return errors.New("destino Node existente inválido")
+	if _, err := os.Lstat(destination); err == nil {
+		if err := validateZGNode(destination); err != nil {
+			return fmt.Errorf("runtime Node existente inválido; se conserva %s: %w", destination, err)
 		}
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(e.managedZGNode()), ".node-")
+	data, err := downloadZGNode(asset)
 	if err != nil {
 		return err
 	}
-	name := tmp.Name()
-	defer os.Remove(name)
-	if err = tmp.Chmod(0755); err == nil {
-		_, err = tmp.Write(node)
+	if err := os.MkdirAll(filepath.Dir(destination), 0700); err != nil {
+		return err
 	}
-	if closeErr := tmp.Close(); err == nil {
-		err = closeErr
-	}
+	stage, err := os.MkdirTemp(filepath.Dir(destination), ".node-stage-")
 	if err != nil {
 		return err
 	}
-	if err = os.WriteFile(name+".npm", npm, 0700); err != nil {
+	defer os.RemoveAll(stage)
+	if err := extractZGNode(data, stage, strings.TrimSuffix(asset, ".tar.gz")); err != nil {
 		return err
 	}
-	defer os.Remove(name + ".npm")
-	if !validExactNode(name) {
-		return errors.New("binario Node descargado no supera la verificación")
-	}
-	if _, err = os.Stat(e.managedZGNode()); err == nil {
-		if err = os.Remove(e.managedZGNode()); err != nil {
-			return err
-		}
-	}
-	if err = os.Rename(name, e.managedZGNode()); err != nil {
+	if err := validateZGNode(stage); err != nil {
 		return err
 	}
-	if err = os.MkdirAll(filepath.Dir(e.managedZGNPM()), 0700); err != nil {
-		return err
+	if _, err := os.Lstat(destination); !errors.Is(err, os.ErrNotExist) {
+		return errors.New("destino Node cambió durante la instalación; no se reemplazó")
 	}
-	if err = os.Rename(name+".npm", e.managedZGNPM()); err != nil {
+	if err := os.Rename(stage, destination); err != nil {
 		return err
 	}
 	if stdout != nil {
-		_, _ = io.WriteString(stdout, "Node gestionado instalado en "+e.managedZGNode()+"\n")
+		_, _ = io.WriteString(stdout, "Node y npm gestionados instalados en "+destination+"\n")
 	}
 	return nil
 }
 
-func validExactNode(path string) bool {
-	out, err := run(5*time.Second, path, "--version")
-	return err == nil && strings.TrimSpace(out) == "v"+zgNodeVersion
+func downloadZGNode(asset string) ([]byte, error) {
+	resp, err := zgNodeClient.Get("https://nodejs.org/dist/v" + zgNodeVersion + "/" + asset)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("descarga Node devolvió HTTP %s", resp.Status)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, zgNodeMaxDownload+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > zgNodeMaxDownload {
+		return nil, errors.New("archivo Node excede tamaño permitido")
+	}
+	if sha256Hex(data) != zgNodeHashes[runtime.GOARCH] {
+		return nil, errors.New("checksum Node no coincide")
+	}
+	return data, nil
 }
 
-func validVersionBinary(path, major string) bool {
-	out, err := run(5*time.Second, path, "--version")
-	return err == nil && strings.HasPrefix(strings.TrimSpace(out), "v"+major+".")
+func validateZGNode(root string) error {
+	node := filepath.Join(root, "bin", "node")
+	npm := filepath.Join(root, zgNPMRelative)
+	for _, path := range []string{node, npm} {
+		if err := checkPath(path); err != nil {
+			return err
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			return fmt.Errorf("runtime Node incompleto: %s", path)
+		}
+	}
+	out, err := run(5*time.Second, node, "--version")
+	if err != nil || strings.TrimSpace(out) != "v"+zgNodeVersion {
+		return errors.New("versión Node gestionada no coincide")
+	}
+	out, err = run(5*time.Second, node, npm, "--version")
+	if err != nil || strings.TrimSpace(out) == "" {
+		return errors.New("npm gestionado no funciona")
+	}
+	return nil
 }
 
-func zgNodeFiles(data []byte) ([]byte, []byte, error) {
+func extractZGNode(data []byte, stage, archiveRoot string) error {
 	gz, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 	defer gz.Close()
 	tr := tar.NewReader(gz)
-	var node, npm []byte
-	for {
-		h, nextErr := tr.Next()
-		if errors.Is(nextErr, io.EOF) {
-			break
+	var total int64
+	for count := 0; count < 20000; count++ {
+		h, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return nil
 		}
-		if nextErr != nil {
-			return nil, nil, nextErr
+		if err != nil {
+			return err
 		}
-		if h.Typeflag != tar.TypeReg || strings.Contains(h.Name, "..") {
-			continue
+		total += h.Size
+		if h.Size < 0 || total > 256<<20 {
+			return errors.New("archivo Node excede límite de extracción")
 		}
-		base := filepath.ToSlash(h.Name)
-		if strings.HasSuffix(base, "/bin/node") {
-			if h.Size > 128<<20 {
-				return nil, nil, errors.New("binario Node excede tamaño permitido")
-			}
-			node, err = io.ReadAll(io.LimitReader(tr, 128<<20))
-			if err != nil {
-				return nil, nil, err
-			}
-		} else if strings.HasSuffix(base, "/lib/node_modules/npm/bin/npm-cli.js") {
-			npm, err = io.ReadAll(io.LimitReader(tr, 8<<20))
-			if err != nil {
-				return nil, nil, err
-			}
+		if err := extractZGNodeEntry(tr, h, stage, archiveRoot); err != nil {
+			return err
 		}
 	}
-	if len(node) == 0 || len(npm) == 0 {
-		return nil, nil, errors.New("archivo Node no contiene bin/node y npm")
+	return errors.New("archivo Node contiene demasiadas entradas")
+}
+
+func extractZGNodeEntry(tr io.Reader, h *tar.Header, stage, archiveRoot string) error {
+	name := strings.TrimSuffix(h.Name, "/")
+	if name == archiveRoot && h.Typeflag == tar.TypeDir {
+		return nil
 	}
-	return node, npm, nil
+	relative, ok := strings.CutPrefix(name, archiveRoot+"/")
+	if !ok || !filepath.IsLocal(relative) || filepath.ToSlash(filepath.Clean(relative)) != relative {
+		return errors.New("ruta inválida en archivo Node")
+	}
+	selected := relative == "bin/node" || strings.HasPrefix(relative, "lib/node_modules/npm/")
+	if !selected || h.Typeflag == tar.TypeDir {
+		return nil
+	}
+	if h.Typeflag != tar.TypeReg || h.Size > 128<<20 {
+		return errors.New("entrada Node/npm no regular o demasiado grande")
+	}
+	target := filepath.Join(stage, relative)
+	if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
+		return err
+	}
+	mode := os.FileMode(0644)
+	if relative == "bin/node" {
+		mode = 0755
+	}
+	file, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.CopyN(file, tr, h.Size)
+	return errors.Join(copyErr, file.Close())
 }
