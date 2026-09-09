@@ -163,7 +163,10 @@ func runHeadless(engine *installer.Engine, ids []string, o cliOptions) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Archivos instalados: %d. Respaldo: %s\n", result.Changed, result.BackupDir)
+	fmt.Printf("Archivos instalados: %d.\n", result.Changed)
+	if result.BackupDir != "" {
+		fmt.Printf("Respaldo: %s\n", result.BackupDir)
+	}
 	fmt.Println("Abre una terminal nueva: codex / codex --profile work. CODEX_PANEL_DISABLE=1 codex omite el panel.")
 	return reportReadiness(engine, ids)
 }

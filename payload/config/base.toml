@@ -7,7 +7,6 @@ service_tier = "default"
 multi_agent = true
 multi_agent_v2 = true
 apps = false
-hooks = false
 plugin_sharing = false
 plugins = false
 remote_plugin = false

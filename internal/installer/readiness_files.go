@@ -34,7 +34,7 @@ func readableInstalledFile(path string) error {
 	return err
 }
 
-func (e *Engine) checkInstalledOperation(moduleID string, op Operation, hooksRequested bool) error {
+func (e *Engine) checkInstalledOperation(moduleID string, op Operation) error {
 	if op.Kind == "panel" {
 		return e.checkInstalledPanel()
 	}
@@ -54,7 +54,7 @@ func (e *Engine) checkInstalledOperation(moduleID string, op Operation, hooksReq
 	case "qlty-install":
 		return checkInstalledQlty(target)
 	case "merge", "native-config":
-		return e.checkInstalledConfig(op, target, hooksRequested)
+		return e.checkInstalledConfig(op, target)
 	case "append", "developer-instructions":
 		return e.checkInstalledInstructions(moduleID, op, target)
 	case "agent-instructions":
@@ -91,15 +91,9 @@ func (e *Engine) checkInstalledTree(op Operation) error {
 
 func (e *Engine) checkInstalledFiles(modules []Module) []string {
 	var pending []string
-	hooksRequested := false
 	for _, m := range modules {
 		for _, op := range m.Operations {
-			hooksRequested = hooksRequested || op.Kind == "hooks-state"
-		}
-	}
-	for _, m := range modules {
-		for _, op := range m.Operations {
-			if err := e.checkInstalledOperation(m.ID, op, hooksRequested); err != nil {
+			if err := e.checkInstalledOperation(m.ID, op); err != nil {
 				pending = append(pending, fmt.Sprintf("%s: %v", m.ID, err))
 			}
 		}

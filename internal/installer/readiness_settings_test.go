@@ -38,7 +38,7 @@ func checkManagedInstructionsFixture(t *testing.T, e *Engine, target string, op 
 	if err := os.WriteFile(target, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.checkInstalledOperation("fixture", op, false); (err == nil) != valid {
+	if err := e.checkInstalledOperation("fixture", op); (err == nil) != valid {
 		t.Fatalf("%s valid=%t: %v", op.Kind, valid, err)
 	}
 }
@@ -58,7 +58,7 @@ func TestReadinessMergedConfigPreservesAccountChoiceAndExtraFields(t *testing.T)
 		if err := os.WriteFile(filepath.Join(e.CodexHome, op.Target), []byte(tc.data), 0600); err != nil {
 			t.Fatal(err)
 		}
-		if err := e.checkInstalledOperation("fixture", op, false); (err == nil) != tc.valid {
+		if err := e.checkInstalledOperation("fixture", op); (err == nil) != tc.valid {
 			t.Fatalf("config %q: %v", tc.data, err)
 		}
 	}
@@ -107,7 +107,7 @@ func TestReadinessPrewalkConfigPreservesPermissions(t *testing.T) {
 		if err := os.WriteFile(target, []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
-		if err := e.checkInstalledOperation("fixture", op, false); (err == nil) != valid {
+		if err := e.checkInstalledOperation("fixture", op); (err == nil) != valid {
 			t.Fatalf("valid=%t: %v", valid, err)
 		}
 		after, err := os.ReadFile(target)
@@ -117,17 +117,14 @@ func TestReadinessPrewalkConfigPreservesPermissions(t *testing.T) {
 	}
 }
 
-func TestReadinessBaseHooksAllowSelectedOverride(t *testing.T) {
+func TestReadinessMergePreservesUnmanagedHooks(t *testing.T) {
 	const source = "config/base.toml"
-	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{source: &fstest.MapFile{Data: []byte("[features]\nhooks=false\n")}}}
+	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{source: &fstest.MapFile{Data: []byte("[features]\nmulti_agent=true\n")}}}
 	op := Operation{Kind: "merge", Source: source, Root: "codex", Target: readinessConfigName}
-	if err := os.WriteFile(filepath.Join(e.CodexHome, op.Target), []byte("model_provider='openai'\n[features]\nhooks=true\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(e.CodexHome, op.Target), []byte("model_provider='openai'\n[features]\nhooks=true\nmulti_agent=true\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.checkInstalledOperation("base", op, false); err == nil {
-		t.Fatal("base hooks override accepted without a hooks module")
-	}
-	if err := e.checkInstalledOperation("base", op, true); err != nil {
+	if err := e.checkInstalledOperation("base", op); err != nil {
 		t.Fatal(err)
 	}
 }

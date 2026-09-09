@@ -419,6 +419,35 @@ func TestPayloadIncludesManagedQlty(t *testing.T) {
 	t.Fatal("Prewalk must require the managed Qlty runtime")
 }
 
+func TestPackagedBasePreservesExistingHooks(t *testing.T) {
+	e := testEngine(t)
+	if err := os.MkdirAll(e.CodexHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(e.CodexHome, "config.toml")
+	if err := os.WriteFile(config, []byte("[features]\nhooks=true\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.BuildPlan([]string{"base"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Apply(p, nil); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := toml.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["features"].(map[string]any)["hooks"] != true {
+		t.Fatal("base disabled existing hooks")
+	}
+}
+
 func TestPackagedFallbackExecutorMigratesGeneratedInstructions(t *testing.T) {
 	e := testEngine(t)
 	data, err := fs.ReadFile(assets, "payload/agents/fallback_executor.toml")

@@ -45,7 +45,7 @@ func TestReadinessChecksSkillState(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(e.CodexHome, "config.toml"), []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
-		if err := e.checkInstalledOperation("fixture", op, false); (err == nil) != enabled {
+		if err := e.checkInstalledOperation("fixture", op); (err == nil) != enabled {
 			t.Fatalf("enabled=%t: %v", enabled, err)
 		}
 	}
@@ -58,13 +58,13 @@ func TestReadinessFilesRequiresEveryRegularChild(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if e.checkInstalledOperation("fixture", op, false) == nil {
+	if e.checkInstalledOperation("fixture", op) == nil {
 		t.Fatal("empty tree accepted")
 	}
 	if err := os.Mkdir(path, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if e.checkInstalledOperation("fixture", op, false) == nil {
+	if e.checkInstalledOperation("fixture", op) == nil {
 		t.Fatal("directory replacing file accepted")
 	}
 	if err := os.Remove(path); err != nil {
@@ -73,7 +73,7 @@ func TestReadinessFilesRequiresEveryRegularChild(t *testing.T) {
 	if err := os.WriteFile(path, []byte("payload"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.checkInstalledOperation("fixture", op, false); err != nil {
+	if err := e.checkInstalledOperation("fixture", op); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(path); err != nil {
@@ -82,11 +82,11 @@ func TestReadinessFilesRequiresEveryRegularChild(t *testing.T) {
 	if err := os.Symlink(filepath.Join(t.TempDir(), "foreign"), path); err != nil {
 		t.Fatal(err)
 	}
-	if e.checkInstalledOperation("fixture", op, false) == nil {
+	if e.checkInstalledOperation("fixture", op) == nil {
 		t.Fatal("symlink child accepted")
 	}
 	op.Kind, op.Target = "copy", "tree"
-	if e.checkInstalledOperation("fixture", op, false) == nil {
+	if e.checkInstalledOperation("fixture", op) == nil {
 		t.Fatal("copy destination directory accepted")
 	}
 }

@@ -51,7 +51,7 @@ func checkInstalledQlty(target string) error {
 	return nil
 }
 
-func (e *Engine) checkInstalledConfig(op Operation, target string, hooksRequested bool) error {
+func (e *Engine) checkInstalledConfig(op Operation, target string) error {
 	config, err := installedModelConfig(target)
 	if err != nil {
 		return err
@@ -74,18 +74,12 @@ func (e *Engine) checkInstalledConfig(op Operation, target string, hooksRequeste
 		return err
 	}
 	expandConfigPaths(expected, e.CodexHome)
-	// Available account choices supersede packaged presets; hooks-state is
-	// applied after base.toml and is verified separately against the app-server.
+	// Available account choices supersede packaged presets.
 	delete(expected, "model")
 	delete(expected, "model_reasoning_effort")
 	if agents, ok := expected["agents"].(map[string]any); ok {
 		delete(agents, "default_subagent_model")
 		delete(agents, "default_subagent_reasoning_effort")
-	}
-	if op.Source == "config/base.toml" && hooksRequested {
-		if features, ok := expected["features"].(map[string]any); ok {
-			delete(features, "hooks")
-		}
 	}
 	if !containsManagedConfig(config, expected) {
 		return fmt.Errorf("configuración gestionada ausente o modificada: %s", target)
