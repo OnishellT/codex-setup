@@ -4,8 +4,10 @@
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
+from pathlib import Path
 
 MAX_INPUT_BYTES = 2 * 1024 * 1024
 REWRITE_TIMEOUT = 2
@@ -27,8 +29,11 @@ def rewrite(event):
     if re.match(r"^\s*rtk(?:\s|$)", command):
         return None
     # `rewrite` is a parser: command is one argv element, never shell=True.
+    executable = rtk_command()
+    if executable is None:
+        return None
     result = subprocess.run(
-        ["rtk", "rewrite", "--", command],
+        [executable, "rewrite", "--", command],
         capture_output=True,
         text=True,
         timeout=REWRITE_TIMEOUT,
@@ -41,6 +46,10 @@ def rewrite(event):
     rewritten = result.stdout.strip()
     if not rewritten or rewritten == command or "\x00" in rewritten:
         return None
+    if executable != "rtk":
+        if not re.match(r"^rtk(?:\s|$)", rewritten):
+            return None
+        rewritten = shlex.quote(executable) + rewritten[3:]
     # Keep cwd, timeout and other tool input fields. Do not change approval or
     # sandbox settings; this is PreToolUse, never PermissionRequest.
     return {
@@ -50,6 +59,19 @@ def rewrite(event):
             "updatedInput": {**original, "command": rewritten},
         }
     }
+
+
+def rtk_command():
+    """Prefer the installer's private binary; otherwise resolve normal PATH."""
+    managed = Path(__file__).resolve().parent / "bin" / "rtk"
+    if managed.is_file() and not managed.is_symlink() and os.access(managed, os.X_OK):
+        return str(managed)
+    home = os.environ.get("CODEX_HOME")
+    if home:
+        managed = Path(home) / "integrations" / "rtk" / "bin" / "rtk"
+        if managed.is_file() and not managed.is_symlink() and os.access(managed, os.X_OK):
+            return str(managed)
+    return None
 
 
 def main():

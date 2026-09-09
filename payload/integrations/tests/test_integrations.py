@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -69,6 +70,30 @@ class RTKTests(unittest.TestCase):
         with patch.dict(os.environ, {"RTK_DISABLED": "1"}), patch.object(rtk.subprocess, "run") as run:
             self.assertIsNone(rtk.rewrite(self.event()))
             run.assert_not_called()
+
+    def test_managed_rtk_without_codex_home_and_path(self):
+        with tempfile.TemporaryDirectory(prefix="rtk managed ") as temp:
+            root = Path(temp) / "home with spaces"
+            hook = root / "integrations" / "rtk" / "hook.py"
+            hook.parent.mkdir(parents=True)
+            shutil.copy(ROOT / "rtk" / "hook.py", hook)
+            binary = hook.parent / "bin" / "rtk"
+            binary.parent.mkdir()
+            binary.write_text("#!/bin/sh\nprintf '%s\\n' 'rtk git status'\n")
+            binary.chmod(0o755)
+            with patch.dict(os.environ, {"PATH": "/nonexistent", "CODEX_HOME": ""}, clear=False), patch.object(rtk, "__file__", str(hook)):
+                output = rtk.rewrite(self.event())
+            self.assertEqual(output["hookSpecificOutput"]["updatedInput"]["command"], shlex.quote(str(binary)) + " git status")
+
+    def test_managed_rtk_declines_unexpected_output_prefix(self):
+        with tempfile.TemporaryDirectory(prefix="rtk managed ") as temp:
+            root = Path(temp) / "home with spaces"
+            managed = root / "integrations" / "rtk" / "bin" / "rtk"
+            managed.parent.mkdir(parents=True)
+            managed.write_text("#!/bin/sh\nprintf '%s\\n' 'unexpected output'\n")
+            managed.chmod(0o755)
+            with patch.dict(os.environ, {"PATH": "/nonexistent", "CODEX_HOME": ""}, clear=False), patch.object(rtk, "__file__", str(root / "integrations" / "rtk" / "hook.py")):
+                self.assertIsNone(rtk.rewrite(self.event()))
 
     def test_entrypoint_timeout_and_missing_rtk(self):
         for error in (FileNotFoundError(), subprocess.TimeoutExpired("rtk", 2)):
