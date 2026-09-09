@@ -8,6 +8,9 @@ import (
 	"testing"
 )
 
+const cliDryRun = "--dry-run"
+const cliInstallDeps = "--install-deps"
+
 func mockCLIAccount(t *testing.T) {
 	t.Helper()
 	python, err := exec.LookPath("python3")
@@ -38,7 +41,7 @@ func TestCLIAccountPreviewInstallAndReadOnlyCheck(t *testing.T) {
 	mockCLIAccount(t)
 	home := t.TempDir()
 	args := []string{"--home", home, "--modules", "base"}
-	if err := runCLIArgs(append(args, "--dry-run")); err != nil {
+	if err := runCLIArgs(append(args, cliDryRun)); err != nil {
 		t.Fatal(err)
 	}
 	config := filepath.Join(home, ".codex", "config.toml")
@@ -69,20 +72,20 @@ func TestCLIDependenciesRequireIndependentConsent(t *testing.T) {
 	mockCLIAccount(t)
 	home := t.TempDir()
 	args := []string{"--home", home, "--modules", "zg"}
-	if err := runCLIArgs(append(args, "--dry-run")); err != nil {
+	if err := runCLIArgs(append(args, cliDryRun)); err != nil {
 		t.Fatal(err)
 	}
-	if err := runCLIArgs(append(args, "--yes")); err == nil || !strings.Contains(err.Error(), "--install-deps") {
+	if err := runCLIArgs(append(args, "--yes")); err == nil || !strings.Contains(err.Error(), cliInstallDeps) {
 		t.Fatalf("missing dependency consent: %v", err)
 	}
 	entries, err := os.ReadDir(home)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("preview/yes installed without dependency consent: %v %v", entries, err)
 	}
-	if err := runCLIArgs(append(args, "--install-deps")); err == nil {
+	if err := runCLIArgs(append(args, cliInstallDeps)); err == nil {
 		t.Fatal("dependency install without yes accepted")
 	}
-	if err := runCLIArgs(append(args, "--yes", "--install-deps", "--dry-run")); err == nil {
+	if err := runCLIArgs(append(args, "--yes", cliInstallDeps, cliDryRun)); err == nil {
 		t.Fatal("dry-run dependency installation accepted")
 	}
 }
