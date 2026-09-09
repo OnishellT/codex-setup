@@ -13,6 +13,8 @@ import (
 	"testing"
 )
 
+const zgArchiveSuffix = ".tar.gz"
+
 type nodeArchiveEntry struct {
 	name, body string
 	kind       byte
@@ -45,7 +47,7 @@ func nodeArchive(t *testing.T, entries []nodeArchiveEntry) []byte {
 }
 
 func validNodeFixture(t *testing.T) []byte {
-	root := strings.TrimSuffix(zgNodeAssets[runtime.GOARCH], ".tar.gz")
+	root := strings.TrimSuffix(zgNodeAssets[runtime.GOARCH], zgArchiveSuffix)
 	node := "#!/bin/sh\nif [ \"$1\" = --version ]; then echo v22.23.2; exit; fi\n[ -f \"${1%/bin/npm-cli.js}/lib/required.js\" ] || exit 1\necho 10.9.8\n"
 	return nodeArchive(t, []nodeArchiveEntry{{root + "/bin/node", node, 0}, {root + "/" + zgNPMRelative, "npm", 0}, {root + "/lib/node_modules/npm/lib/required.js", "required", 0}})
 }
@@ -60,7 +62,7 @@ func mockNodeDownload(t *testing.T, data []byte, pin bool) {
 	if pin {
 		zgNodeHashes[runtime.GOARCH] = sha256Hex(data)
 		stage := t.TempDir()
-		if err := extractZGNode(data, stage, strings.TrimSuffix(zgNodeAssets[runtime.GOARCH], ".tar.gz")); err != nil {
+		if err := extractZGNode(data, stage, strings.TrimSuffix(zgNodeAssets[runtime.GOARCH], zgArchiveSuffix)); err != nil {
 			t.Fatal(err)
 		}
 		oldRuntime := zgNodeRuntimeHashes[runtime.GOARCH]
@@ -127,7 +129,7 @@ func TestZGNodeArchiveRejectsUnsafeEntries(t *testing.T) {
 }
 
 func TestInstallZGNodeFailedValidationLeavesNoRuntime(t *testing.T) {
-	root := strings.TrimSuffix(zgNodeAssets[runtime.GOARCH], ".tar.gz")
+	root := strings.TrimSuffix(zgNodeAssets[runtime.GOARCH], zgArchiveSuffix)
 	mockNodeDownload(t, nodeArchive(t, []nodeArchiveEntry{{root + "/bin/node", "#!/bin/sh\necho v22.23.2\n", 0}}), true)
 	e := &Engine{CodexHome: t.TempDir()}
 	if err := e.installZGNode(io.Discard); err == nil {

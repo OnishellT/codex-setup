@@ -48,32 +48,37 @@ func TestZGPinArtifacts(t *testing.T) {
 		t.Skip("set CODEX_SETUP_PIN_ARTIFACTS to an isolated artifact directory")
 	}
 	for _, arch := range []string{"amd64", "arm64"} {
-		data, err := os.ReadFile(filepath.Join(root, "node-"+arch+".tar.gz"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if sha256Hex(data) != zgNodeHashes[arch] {
-			t.Fatal("unverified Node archive")
-		}
-		stage := t.TempDir()
-		if err := extractZGNode(data, stage, strings.TrimSuffix(zgNodeAssets[arch], ".tar.gz")); err != nil {
-			t.Fatal(err)
-		}
-		digest, err := directorySHA256(stage)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("Node %s: %s", arch, digest)
-		if digest != zgNodeRuntimeHashes[arch] {
-			t.Fatal("Node runtime pin mismatch")
-		}
-		digest, err = directorySHA256(filepath.Join(root, arch, "node_modules"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Logf("npm %s: %s", arch, digest)
-		if digest != zgPackageRuntimeHashes[arch] {
-			t.Fatal("npm runtime pin mismatch")
-		}
+		t.Run(arch, func(t *testing.T) { checkZGPinArtifacts(t, root, arch) })
+	}
+}
+
+func checkZGPinArtifacts(t *testing.T, root, arch string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, "node-"+arch+".tar.gz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sha256Hex(data) != zgNodeHashes[arch] {
+		t.Fatal("unverified Node archive")
+	}
+	stage := t.TempDir()
+	if err := extractZGNode(data, stage, strings.TrimSuffix(zgNodeAssets[arch], ".tar.gz")); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := directorySHA256(stage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("Node %s: %s", arch, digest)
+	if digest != zgNodeRuntimeHashes[arch] {
+		t.Fatal("Node runtime pin mismatch")
+	}
+	digest, err = directorySHA256(filepath.Join(root, arch, "node_modules"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("npm %s: %s", arch, digest)
+	if digest != zgPackageRuntimeHashes[arch] {
+		t.Fatal("npm runtime pin mismatch")
 	}
 }

@@ -107,19 +107,23 @@ func (e *Engine) checkInstalledSkills(op Operation) error {
 		if err != nil {
 			return err
 		}
-		count, enabled := 0, false
-		for _, raw := range entries {
-			item, _ := raw.(map[string]any)
-			if item["path"] == target || item["path"] == filepath.Dir(target) {
-				count++
-				enabled = item["enabled"] == op.Enabled
-			}
-		}
-		if count != 1 || !enabled {
+		if !installedSkillMatches(entries, target, op.Enabled) {
 			return fmt.Errorf("skill ausente, duplicada o deshabilitada: %s", target)
 		}
 		return nil
 	})
+}
+
+func installedSkillMatches(entries []any, target string, wanted bool) bool {
+	count, matches := 0, false
+	for _, raw := range entries {
+		item, _ := raw.(map[string]any)
+		if item["path"] == target || item["path"] == filepath.Dir(target) {
+			count++
+			matches = item["enabled"] == wanted
+		}
+	}
+	return count == 1 && matches
 }
 
 func (e *Engine) checkInstalledPanel() error {

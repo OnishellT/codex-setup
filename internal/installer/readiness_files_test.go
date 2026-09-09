@@ -9,17 +9,18 @@ import (
 )
 
 func TestReadinessRejectsModifiedPayload(t *testing.T) {
-	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{"script.sh": &fstest.MapFile{Data: []byte("#!/bin/sh\nexit 0\n")}}}
-	path := filepath.Join(e.CodexHome, "script.sh")
+	const name, content = "script.sh", "#!/bin/sh\nexit 0\n"
+	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{name: &fstest.MapFile{Data: []byte(content)}}}
+	path := filepath.Join(e.CodexHome, name)
 	for _, tc := range []struct {
 		data  string
 		mode  os.FileMode
 		valid bool
 	}{
-		{"#!/bin/sh\nexit 0\n", 0700, true},
+		{content, 0700, true},
 		{"", 0700, false},
 		{"#!/bin/sh\nexit 1\n", 0700, false},
-		{"#!/bin/sh\nexit 0\n", 0600, false},
+		{content, 0600, false},
 	} {
 		if err := os.WriteFile(path, []byte(tc.data), tc.mode); err != nil {
 			t.Fatal(err)
@@ -27,7 +28,7 @@ func TestReadinessRejectsModifiedPayload(t *testing.T) {
 		if err := os.Chmod(path, tc.mode); err != nil {
 			t.Fatal(err)
 		}
-		if err := e.checkInstalledPayload("script.sh", path, false, true); (err == nil) != tc.valid {
+		if err := e.checkInstalledPayload(name, path, false, true); (err == nil) != tc.valid {
 			t.Fatalf("payload %q mode %o: %v", tc.data, tc.mode, err)
 		}
 	}
