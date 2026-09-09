@@ -340,6 +340,8 @@ func parseHooks(status *AccountStatus, raw []byte) {
 
 func ReadAccount(codexHome string) (*AccountStatus, error) { return accountProbe(codexHome) }
 
+func (e *Engine) ReadAccount() (*AccountStatus, error) { return ReadAccount(e.CodexHome) }
+
 func ResolveAccountChoices(status *AccountStatus, requested map[string]ModelChoice) (map[string]ModelChoice, []string, error) {
 	roles := make(map[string]bool)
 	for _, role := range ModelRoles {
@@ -447,6 +449,7 @@ func (e *Engine) BuildPlanWithAccount(ids []string, requested map[string]ModelCh
 	p, err := e.buildPlanWithOptions(ids, choices, status.Models)
 	if p != nil {
 		p.Warnings = append(p.Warnings, warnings...)
+		p.Models = choices
 	}
 	return p, err
 }

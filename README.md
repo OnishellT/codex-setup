@@ -4,7 +4,7 @@ Instalador modular local en Go + [Bubble Tea v2](https://github.com/charmbracele
 Snapshot del setup del 2026-09-03, preparado para copiar a otra PC Linux.
 No es un plugin oficial ni reemplaza el ejecutable de Codex CLI. El módulo del
 panel integra el comando habitual `codex` mediante una función del shell.
-No soporta Windows.
+Soporta Linux amd64/arm64. macOS y Windows se rechazan explícitamente.
 
 ## Usar
 
@@ -16,8 +16,10 @@ cd ~/projects/codex-setup
 ```
 
 El menú usa ↑/↓ para moverse y Espacio para marcar módulos. Enter abre una
-vista previa; un segundo Enter confirma la instalación. Las dependencias se
-incluyen automáticamente. Puedes volver atrás o cancelar antes de confirmar.
+vista previa. Si faltan dependencias, se muestran los paquetes/comandos y se pide
+una confirmación exclusiva para instalarlos (sudo puede solicitar tu contraseña).
+Después se revisan y confirman por separado los cambios de configuración.
+Puedes volver atrás o cancelar antes de cada confirmación.
 La ayuda de cada pantalla muestra sus teclas. El menú está en español; la UI del
 panel conserva su comportamiento actual (inglés por defecto, logs sin traducir).
 
@@ -34,8 +36,26 @@ make release
 
 `install.sh` usa el binario existente; después de editar el código/payload debes
 recompilar con `make build` o `make release`. Si falta el binario, el script intenta
-compilarlo con Go. En macOS los módulos de archivos son utilizables compilando;
-el panel Linux se rechaza explícitamente. macOS no está validado.
+compilarlo con Go. No se intenta compilar para plataformas no soportadas.
+
+## Requisitos y comprobación final
+
+Parte de Codex CLI ya instalado y `codex login` completado con ChatGPT en el
+`CODEX_HOME` destino. El instalador consulta `account/read` y `model/list` del
+app-server local; no copia autenticación ni consume una generación del modelo.
+Sin cuenta verificable no instala. Un proveedor o catálogo externo configurado
+bloquea la comprobación: retíralo conscientemente antes de continuar.
+
+La instalación automática de paquetes usa repositorios nativos de Ubuntu 24.04+,
+Debian 12+, Fedora 40+ o Arch rolling. Requiere red y permisos del gestor de
+paquetes. RTK y zg usan copias privadas; no se reemplazan ejecutables globales.
+Los fallos de red, permisos o paquetes se muestran y bloquean la configuración.
+
+Al terminar distingue **archivos instalados** de **listo para usar**. Los hooks
+requieren que revises y concedas confianza en `/hooks` de Codex. El instalador
+nunca los confía por ti: pulsa **r** en el resultado para volver a comprobar.
+También puedes ejecutar `--check` con la misma selección y destino; devuelve un
+error mientras haya archivos, dependencias, modelos o hooks pendientes.
 
 ## Módulos
 
@@ -67,17 +87,23 @@ Se habilita MultiAgent V2 y `forced_login_method = "chatgpt"`.
 | Principal | GPT-6 Astra / medium |
 | Reviewer | GPT-5.6 Sol / xhigh |
 | Executors, explorers y subagente genérico | GPT-5.3 Codex Spark / medium |
+| Fallback explorer / executor | GPT-5.6 Luna / medium |
 
-El principal queda fijo en Astra/medium. En el TUI pulsa **m** desde Módulos:
-↑/↓ elige subagente, ←/→ cambia modelo,
-Tab cambia esfuerzo y **d** restaura el preset. Enter vuelve a los módulos;
-la vista previa muestra la matriz antes de escribir. Las elecciones se aplican
-después de las plantillas, sin modificar permisos o instrucciones personalizadas.
-El catálogo de opciones procede de `codex debug models --bundled`, no del
-proveedor activo. Si Codex no está instalado, se ofrece el preset conocido.
-Spark se incluye explícitamente porque algunas versiones lo omiten del catálogo
-incluido; su acceso depende de la suscripción. `model_reasoning_summary = "none"`
-evita enviar a Spark el campo de resumen que rechaza; no desactiva su razonamiento.
+En el TUI pulsa **m** desde Módulos: ↑/↓ elige rol, ←/→ cambia modelo,
+Tab cambia esfuerzo y **d** restaura el preset. Las opciones proceden del catálogo
+de tu cuenta, no del catálogo incluido en el ejecutable. **c** vuelve a consultar
+la cuenta. Enter vuelve a los módulos; la revisión muestra las elecciones
+efectivas antes de escribir.
+
+Los valores omitidos usan el preset si está disponible. Si falta Spark, se
+prefiere Luna/medium; si tampoco está disponible, se propone el modelo
+predeterminado de la cuenta. Los roles de respaldo requieren Luna o una elección
+explícita disponible. Una elección explícita no disponible se rechaza.
+Esto comprueba acceso al catálogo, no garantiza cuota libre para la siguiente
+generación. En ejecución, la política de fallback distribuida sólo permite
+reintentar con Luna ante agotamiento explícito de Spark, nunca por fallos de
+pruebas, red o calidad del resultado. No cambia el modelo del principal ni consume
+un reset. `model_reasoning_summary = "none"` evita el campo incompatible con Spark.
 
 Para automatizar, `--models roles.json` acepta un objeto parcial como:
 
@@ -90,92 +116,33 @@ Para automatizar, `--models roles.json` acepta un objeto parcial como:
 ./install.sh --modules base,prewalk,profiles --models roles.json --yes
 ```
 
-Los roles omitidos usan el preset. Modelos o esfuerzos no admitidos se rechazan
+Los roles omitidos siguen la resolución de cuenta descrita arriba. Modelos o esfuerzos no admitidos se rechazan
 antes de escribir. Reinicia Codex después de cambiar configuración. Migrar
 configuración no elimina automáticamente servicios o credenciales externos:
 retíralos sólo después de comprobar la ruta nativa y terminar sesiones dependientes.
 
 ## zg opcional
 
-`./install.sh --modules zg --yes` añade una configuración MCP conservadora y un
-bloque de guía a `$CODEX_HOME` y lo deja con `enabled = true` para work y personal.
-El módulo sigue siendo opcional en el menú. Está destinado únicamente
-a un índice local existente y pertinente; no crea, reconstruye ni borra índices,
-ni descarga paquetes, modelos o binarios. Conserva las instrucciones ajenas,
-Prewalk y el resto de la configuración; reaplicar `zg` repone su propio bloque.
+`./install.sh --modules zg --yes --install-deps` instala una copia privada y
+configura MCP con rutas absolutas. Descarga Node 22.23.2 y
+`@zvec/zvec-grep@0.2.1`, verifica sus hashes, instala dependencias npm con
+`--ignore-scripts`, aplica el parche Linux PR 86 y comprueba bindings nativos.
+No usa npm global, no arranca el servidor durante la instalación y no descarga
+modelos ni crea, reconstruye o borra índices. Los directorios existentes no
+válidos se preservan y se rechazan, en lugar de sobrescribirlos.
 
-Antes de instalar el módulo, prepara Node.js **>= 22** y la versión fija
-`@zvec/zvec-grep@0.2.1`. El setup verifica los requisitos antes de escribir:
-si faltan o el parche Linux no es válido, aborta con un error, no instala una
-entrada desactivada. No descarga ni instala estas dependencias:
+El módulo mantiene `enabled = true`, `required = false` y sólo expone
+`zvec_grep_search`. Las llamadas siguen las aprobaciones de Codex. Úsalo sólo
+con un índice local pertinente y para búsquedas conceptuales; para búsquedas
+exactas, ausencia de índice o fallos usa `rg`. Todos los agentes deben enviar
+`freshness: "wait_for_fresh"`; descarta `possibly_stale`, `timeout` y `error`.
+La instalación no se considera una autorización para crear índices.
 
-```sh
-npm install -g @zvec/zvec-grep@0.2.1
-# Sólo si sharp detecta libvips global y la instalación falla:
-SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install -g @zvec/zvec-grep@0.2.1
-```
-
-Al activarse, MCP usa stdio con `zg server --stdio --mcp-toolset agent`, que
-inicia su daemon; sólo ofrece `zvec_grep_search`, no es obligatorio y usa
-aprobación `auto`. Esto puede requerir confirmación; con `approval_policy = "never"`
-la llamada puede bloquearse y se usa `rg`, sin aprobar herramientas globalmente.
-
-En Linux, PR 86 debe aplicarse y verificarse antes de instalar el módulo. El issue
-upstream [#92](https://github.com/zvec-ai/zvec-grep/issues/92) se mitiga por
-búsqueda con freshness, no confiando en la indexación en segundo plano ni con un
-daemon alternativo. Tanto las instalaciones nuevas como las reinstalaciones
-del módulo quedan habilitadas después de superar la comprobación.
-
-El módulo incluye el helper manual y reversible de PR 86. El instalador reutiliza
-su verificación de sólo lectura; nunca aplica ni revierte el parche, ni inicia
-MCP. Después de instalar el paquete, revisa el helper y, sólo en Linux, aplícalo
-desde la carpeta del setup antes de instalar el módulo:
-
-```sh
-node payload/integrations/zg/pr86-watch-manager.mjs apply
-node payload/integrations/zg/pr86-watch-manager.mjs check
-./install.sh --modules zg --yes
-```
-
-Sólo acepta `@zvec/zvec-grep@0.2.1` y hashes conocidos, crea una única copia
-original y falla cerrado ante una versión, contenido o backup desconocidos. Para
-revertirlo explícitamente: `node "${CODEX_HOME:-$HOME/.codex}/integrations/zg/pr86-watch-manager.mjs" restore`.
-Detén antes el daemon correspondiente con `zg server off` (afecta a sus otras
-sesiones). Reinstalar npm puede borrar el parche; comprueba su estado nuevamente.
-La comprobación exige que `zg` en PATH corresponda al paquete global validado.
-Se hace en la máquina donde ejecutas el instalador, no en una máquina remota
-indicada por `--home`. No es una vigilancia permanente: valida otra vez tras
-actualizar dependencias. Si trasladas sólo el binario y falta el parche, lleva
-también `payload/integrations/zg/` para preparar el paquete. macOS no está validado
-y no recibe el parche Linux.
-
-Mantén los índices del modelo local `potion-code-16m-v2` limitados al repositorio
-elegido explícitamente, nunca a `$HOME`. Un índice local no implica resultados
-ocultos de un proveedor. Crear un índice requiere una acción explícita del usuario:
-
-```sh
-zg index /ruta/repo --embedding local/potion-code-16m-v2 --device cpu
-```
-
-Si se usa un servicio loopback, su token opcional se gestiona fuera del setup:
-aquí no se almacenan secretos ni variables de entorno. Usa zg sólo si existe un
-índice pertinente **y** la búsqueda es conceptual o la ubicación es desconocida;
-para búsqueda exacta o exhaustiva usa `rg` y verifica el archivo actual. Si no
-hay índice o zg falla, vuelve a `rg`.
-
-El orquestador y todos los subagentes deben añadir explícitamente
-`freshness: "wait_for_fresh"` a cada `zvec_grep_search`. Es una instrucción para
-el agente, no una configuración por defecto del servidor. Si devuelve
-`possibly_stale`, `timeout` o `error`, se descarta el resultado, se usa `rg` y se
-comprueba el archivo vivo. No se confía en indexación en segundo plano para
-freshness: ésa es la mitigación de #92 sólo por búsqueda.
-
-No ejecutes `zg install`: gestiona configuración, AGENTS y aprobaciones por fuera
-de este setup. Para dejarlo desactivado, establece `enabled = false` en
-`[mcp_servers.zvec_grep]` y ejecuta `zg server off`. Esto detiene el daemon
-compartido y por ello afecta a otras sesiones o herramientas que lo usen, pero no
-borra los índices. Reaplicar el módulo vuelve a habilitarlo tras verificar los
-requisitos, pero conserva el resto de `config.toml` y Prewalk.
+Las rutas del runtime, la comprobación/reversión del parche y las operaciones
+manuales están en [la guía de zg](payload/integrations/zg/README.md).
+No ejecutes `zg install`: administra configuración y aprobaciones fuera de este
+setup. Desactivar `[mcp_servers.zvec_grep].enabled` evita arranques futuros;
+detener su daemon compartido afecta a otras sesiones.
 
 Ponytail inyecta sus instrucciones por hooks y también instala `ponytail`,
 `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help` y
@@ -234,7 +201,7 @@ no esté confiado o el panel esté desactivado.
 anteriores e instala la skill automática `$CODEX_HOME/skills/prewalk/SKILL.md`,
 registrada como enabled, además de los roles de exploración, ejecución/fallback y
 `agents/engineering_reviewer.toml`,
-helpers de Git/Qlty y hooks de revisión. Requiere Python 3.8+, Git, `tar` con
+helpers de Git/Qlty y hooks de revisión. Requiere Python 3.11+, Git, `tar` con
 soporte xz y conexión en la primera instalación: descarga Qlty 0.644.0 desde su
 release oficial, verifica
 su SHA-256 y lo instala en `$CODEX_HOME/integrations/prewalk/bin`. En Linux usa
@@ -289,7 +256,8 @@ El módulo usa las operaciones gestionadas `developer-instructions`, `template-c
 Los modelos elegidos en el instalador se aplican explícitamente a cada rol.
 Se conservan instrucciones y permisos personalizados; las instrucciones generadas
 conocidas se actualizan. Los fallbacks son roles explícitos y pueden configurarse
-con un modelo nativo diferente; el preset usa Spark para todos los writers/explorers.
+con un modelo nativo diferente; el preset usa Spark para ejecución/exploración
+y Luna/medium para los dos respaldos.
 El hook global se actualiza sin borrar hooks ajenos. Los scripts de
 `integrations/prewalk` se actualizan con respaldo; personaliza settings y roles,
 no las copias gestionadas de scripts.
@@ -427,19 +395,9 @@ y [agentes personalizados](https://learn.chatgpt.com/docs/agent-configuration/su
 - tmux real **>= 3.3**; validado con **3.7b**. No sirve un shim de tmux.
 - `tic` de ncurses para generar la definición de terminal local.
 
-Ejemplos de dependencias del sistema (ejecútalos tú si hacen falta):
-
-```sh
-# Debian/Ubuntu (verifica que python3 sea >= 3.11)
-sudo apt install python3 tmux ncurses-bin
-# Fedora
-sudo dnf install python3 tmux ncurses
-# Arch
-sudo pacman -S python tmux ncurses
-```
-
-El instalador **no ejecuta sudo**, no cambia el PATH, no instala Codex, no crea
-conversaciones ni consume tokens. Si tu tmux está en una ruta especial:
+El instalador ofrece instalar estas dependencias mediante el gestor nativo,
+con confirmación separada antes de ejecutar sudo. No instala Codex, no crea
+conversaciones ni solicita generaciones. Si tu tmux está en una ruta especial:
 
 ```sh
 CODEX_PANEL_TMUX=/ruta/al/tmux ./install.sh
@@ -525,13 +483,11 @@ La apariencia depende también del tema del emulador de terminal del equipo dest
 ```sh
 ./install.sh --list
 ./install.sh --modules agents,profiles --dry-run
-./install.sh --modules rtk,ponytail --yes
-./install.sh --modules context-handoff --yes
+./install.sh --modules rtk,ponytail --yes --install-deps
+./install.sh --modules context-handoff --yes --install-deps
 
-# Prueba aislada (no cambia el HOME real ni copia autenticación)
-destino_prueba=$(mktemp -d)
-./install.sh --home "$destino_prueba" --modules rtk,ponytail --yes
-./install.sh --home "$destino_prueba" --modules rtk,ponytail --dry-run
+# Revalidación sin reinstalar ni conceder confianza
+./install.sh --modules rtk,ponytail --check
 
 make test
 make check
@@ -539,7 +495,8 @@ make check
 
 `--home` ignora el `CODEX_HOME` heredado para evitar tocar accidentalmente la
 cuenta real durante pruebas. `--codex-home` permite un destino explícito distinto.
-Los tests Go usan directorios temporales. La prueba de integración instala el
+Un destino aislado sin login propio se rechaza; no copies credenciales para probar.
+Los tests Go usan directorios temporales y un app-server simulado para la cuenta. La prueba de integración instala el
 panel en uno de ellos (incluido terminfo) y ejecuta allí su suite Python; requiere
 las dependencias del panel. No se ejecuta la suite sobre un payload sin compilar.
 Algunos tests opcionales del panel

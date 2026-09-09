@@ -5,11 +5,11 @@ setup_os=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$(uname -m)" in
   x86_64|amd64) setup_arch=amd64 ;;
   aarch64|arm64) setup_arch=arm64 ;;
-  *) printf '%s\n' 'Arquitectura no empaquetada; compila con Go: go build -o codex-setup .'; exit 1 ;;
+  *) printf '%s\n' 'Arquitectura no soportada: se requiere Linux amd64/arm64.'; exit 1 ;;
 esac
 case "$setup_os" in
-  linux|darwin) ;;
-  *) printf '%s\n' 'Sistema no soportado. Windows no está soportado.'; exit 1 ;;
+  linux) ;;
+  *) printf '%s\n' 'Sistema no soportado: se requiere Linux amd64/arm64.'; exit 1 ;;
 esac
 setup_binary="$setup_root/bin/codex-setup-$setup_os-$setup_arch"
 if [ ! -x "$setup_binary" ]; then

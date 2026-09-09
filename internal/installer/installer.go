@@ -50,6 +50,7 @@ type Plan struct {
 	Modules  []Module
 	Changes  []Change
 	Warnings []string
+	Models   map[string]ModelChoice
 	owner    *Engine
 	actions  []postAction
 }

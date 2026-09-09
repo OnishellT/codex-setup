@@ -19,14 +19,46 @@ import (
 )
 
 type fakeBackend struct {
-	modules    []installer.Module
-	plan       *installer.Plan
-	planErr    error
-	buildCalls int
-	applyCalls int
-	buildIDs   []string
-	applied    *installer.Plan
-	apply      func(*installer.Plan, func(string)) (installer.Result, error)
+	modules           []installer.Module
+	plan              *installer.Plan
+	planErr           error
+	buildCalls        int
+	applyCalls        int
+	buildIDs          []string
+	applied           *installer.Plan
+	apply             func(*installer.Plan, func(string)) (installer.Result, error)
+	account           *installer.AccountStatus
+	accountErr        error
+	dependencies      *installer.DependencyPlan
+	dependencyErr     error
+	dependencyCalls   int
+	dependencyInstall func(*installer.DependencyPlan, io.Reader, io.Writer, io.Writer) error
+	readiness         *installer.Readiness
+	verifyErr         error
+	verifyCalls       int
+}
+
+func (f *fakeBackend) ReadAccount() (*installer.AccountStatus, error) { return f.account, f.accountErr }
+func (f *fakeBackend) PlanDependencies([]string) (*installer.DependencyPlan, error) {
+	return f.dependencies, f.dependencyErr
+}
+func (f *fakeBackend) InstallDependencies(p *installer.DependencyPlan, in io.Reader, out, stderr io.Writer) error {
+	f.dependencyCalls++
+	if f.dependencyInstall != nil {
+		return f.dependencyInstall(p, in, out, stderr)
+	}
+	f.dependencies = nil
+	return nil
+}
+func (f *fakeBackend) BuildPlanWithAccount(ids []string, _ map[string]installer.ModelChoice, _ *installer.AccountStatus) (*installer.Plan, error) {
+	return f.BuildPlan(ids)
+}
+func (f *fakeBackend) VerifyInstallation([]string) (*installer.Readiness, error) {
+	f.verifyCalls++
+	if f.readiness == nil {
+		return &installer.Readiness{}, f.verifyErr
+	}
+	return f.readiness, f.verifyErr
 }
 
 func (f *fakeBackend) Resolve(ids []string) ([]installer.Module, error) {
@@ -61,7 +93,10 @@ func fixture() (*model, *fakeBackend) {
 		Changes:  []installer.Change{{Path: "/destino/.codex/config.toml", Kind: "actualizar"}},
 		Warnings: []string{"Se eliminarán comentarios TOML."},
 	}}
-	return newModel(f, modules, "/destino/.codex"), f
+	f.account = &installer.AccountStatus{Models: installer.NativeModelOptions(), DefaultModel: "gpt-6-astra"}
+	m := newModel(f, modules, "/destino/.codex")
+	m.setAccount(f.account, nil)
+	return m, f
 }
 
 func press(m *model, code rune) tea.Cmd {
@@ -183,7 +218,9 @@ func TestFirstEnterOnlyPreviewsSecondConfirms(t *testing.T) {
 	if len(m.logs) != 1 || next == nil {
 		t.Fatal("progress was not displayed or listener stopped")
 	}
-	m.Update(next())
+	for next != nil && m.stage == installing {
+		_, next = m.Update(next())
+	}
 	if m.stage != finished || m.result.Changed != 1 {
 		t.Fatal("missing final result")
 	}

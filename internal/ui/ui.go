@@ -4,6 +4,7 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -17,11 +18,16 @@ import (
 	"codex-setup/internal/installer"
 )
 
-// backend keeps terminal interaction independently testable. Only Apply writes.
+// backend keeps terminal interaction independently testable. Dependency installs
+// and configuration writes have separate confirmations.
 type backend interface {
 	Resolve([]string) ([]installer.Module, error)
-	BuildPlan([]string) (*installer.Plan, error)
+	ReadAccount() (*installer.AccountStatus, error)
+	PlanDependencies([]string) (*installer.DependencyPlan, error)
+	InstallDependencies(*installer.DependencyPlan, io.Reader, io.Writer, io.Writer) error
+	BuildPlanWithAccount([]string, map[string]installer.ModelChoice, *installer.AccountStatus) (*installer.Plan, error)
 	Apply(*installer.Plan, func(string)) (installer.Result, error)
+	VerifyInstallation([]string) (*installer.Readiness, error)
 }
 
 type stage uint8
@@ -35,15 +41,19 @@ const (
 )
 
 type planMsg struct {
-	generation int
-	plan       *installer.Plan
-	err        error
+	generation   int
+	plan         *installer.Plan
+	err          error
+	dependencies *installer.DependencyPlan
+	account      *installer.AccountStatus
 }
 
 type progressMsg string
 type resultMsg struct {
-	result installer.Result
-	err    error
+	result    installer.Result
+	err       error
+	readiness *installer.Readiness
+	checkErr  error
 }
 
 type model struct {
@@ -70,6 +80,12 @@ type model struct {
 	choices        map[string]installer.ModelChoice
 	modelOptions   []installer.ModelOption
 	roleCursor     int
+	requested      map[string]installer.ModelChoice
+	accountErr     error
+	dependencies   *installer.DependencyPlan
+	readiness      *installer.Readiness
+	checkErr       error
+	verifying      bool
 }
 
 // Run starts an interactive installation. Cancelling before confirmation is a
@@ -104,6 +120,9 @@ func Run(engine *installer.Engine) error {
 
 func runError(final tea.Model, err error) error {
 	if m, ok := final.(*model); ok {
+		if m.installErr == nil && m.stage == finished && !m.readiness.Ready() {
+			return errors.Join(err, m.checkErr, errors.New("archivos instalados; quedan comprobaciones pendientes"))
+		}
 		return errors.Join(err, m.installErr)
 	}
 	return err
@@ -127,7 +146,7 @@ func newModel(engine backend, modules []installer.Module, codexHome string) *mod
 		selected: make(map[string]bool), width: 80, height: 24, dark: true,
 	}
 	m.choices = installer.DefaultModelChoices()
-	m.modelOptions = installer.NativeModelOptions()
+	m.requested = make(map[string]installer.ModelChoice)
 	for _, module := range modules {
 		if module.Default {
 			m.selected[module.ID] = true
@@ -137,7 +156,7 @@ func newModel(engine backend, modules []installer.Module, codexHome string) *mod
 	return m
 }
 
-func (m *model) Init() tea.Cmd { return tea.RequestBackgroundColor }
+func (m *model) Init() tea.Cmd { return tea.Batch(tea.RequestBackgroundColor, m.accountCommand()) }
 
 func (m *model) ids() []string {
 	ids := make([]string, 0, len(m.selected))
@@ -170,8 +189,28 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.building, m.plan, m.planErr = false, msg.plan, msg.err
-		if m.planErr == nil && m.plan == nil {
+		m.dependencies = msg.dependencies
+		m.setAccount(msg.account, nil)
+		if msg.plan != nil {
+			for role, choice := range msg.plan.Models {
+				m.choices[role] = choice
+			}
+		}
+		if m.planErr == nil && m.plan == nil && !m.dependencies.NeedsInstall() {
 			m.planErr = errors.New("el motor no devolvió un plan; vuelve a la selección e inténtalo de nuevo")
+		}
+	case accountMsg:
+		m.setAccount(msg.status, msg.err)
+	case dependencyResultMsg:
+		m.stage, m.offset = preview, 0
+		if msg.err != nil {
+			m.building, m.planErr = false, msg.err
+			return m, nil
+		}
+		return m, m.preparePlan()
+	case verificationMsg:
+		if m.stage == finished {
+			m.verifying, m.readiness, m.checkErr = false, msg.readiness, msg.err
 		}
 	case progressMsg:
 		if m.stage == installing {
@@ -184,6 +223,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case resultMsg:
 		if m.stage == installing {
 			m.stage, m.result, m.installErr = finished, msg.result, msg.err
+			m.readiness, m.checkErr = msg.readiness, msg.checkErr
 			m.offset, m.follow = 0, false
 		}
 	case tea.KeyPressMsg:
@@ -205,10 +245,11 @@ func (m *model) key(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.roleCursor = min(len(installer.ModelRoles)-1, m.roleCursor+1)
 		case "d":
 			m.choices = installer.DefaultModelChoices()
+			clear(m.requested)
 		case "left", "right", "tab", "shift+tab":
 			role := installer.ModelRoles[m.roleCursor].ID
-			if role == "principal" {
-				m.notice = "Principal fijo: Astra/medium. Selecciona un subagente con ↓."
+			if len(m.modelOptions) == 0 {
+				m.notice = "Catálogo de la cuenta no disponible; vuelve y pulsa c para comprobar la sesión ChatGPT."
 				return m, nil
 			}
 			m.notice = ""
@@ -249,6 +290,7 @@ func (m *model) key(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				choice.Effort = efforts[(ei+delta+len(efforts))%len(efforts)]
 			}
 			m.choices[role] = choice
+			m.requested[role] = choice
 		}
 		if k != "q" && k != "ctrl+c" {
 			m.ensureCursor()
@@ -265,8 +307,15 @@ func (m *model) key(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.stage == finished && k == "enter" {
 		return m, tea.Quit
 	}
+	if m.stage == finished && k == "r" && !m.verifying && m.installErr == nil {
+		m.verifying = true
+		engine, ids := m.engine, m.ids()
+		return m, func() tea.Msg { r, err := engine.VerifyInstallation(ids); return verificationMsg{r, err} }
+	}
 	if m.stage == selection {
 		switch k {
+		case "c":
+			return m, m.accountCommand()
 		case "m":
 			m.stage, m.offset, m.roleCursor = modelSetup, 0, 0
 			return m, nil
@@ -302,29 +351,7 @@ func (m *model) key(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if key.IsRepeat {
 				return m, nil
 			}
-			m.stage, m.building, m.offset = preview, true, 0
-			m.plan, m.planErr, m.notice = nil, nil, ""
-			m.generation++
-			ids, generation, engine := m.ids(), m.generation, m.engine
-			choices := make(map[string]installer.ModelChoice, len(m.choices))
-			for role, choice := range m.choices {
-				choices[role] = choice
-			}
-			return m, func() tea.Msg {
-				if len(ids) == 0 {
-					return planMsg{generation: generation, err: errors.New("no hay módulos seleccionados; pulsa r y marca al menos uno con Espacio")}
-				}
-				var plan *installer.Plan
-				var err error
-				if native, ok := engine.(interface {
-					BuildPlanWithModels([]string, map[string]installer.ModelChoice) (*installer.Plan, error)
-				}); ok {
-					plan, err = native.BuildPlanWithModels(ids, choices)
-				} else {
-					plan, err = engine.BuildPlan(ids)
-				}
-				return planMsg{generation: generation, plan: plan, err: err}
-			}
+			return m, m.preparePlan()
 		}
 	} else if m.stage == preview {
 		switch k {
@@ -332,11 +359,16 @@ func (m *model) key(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.stage, m.offset, m.building = selection, 0, false
 			m.ensureCursor()
 		case "enter":
+			if !key.IsRepeat && !m.building && m.planErr == nil && m.dependencies.NeedsInstall() {
+				m.stage = installing
+				command := &dependencyCommand{engine: m.engine, plan: m.dependencies}
+				return m, tea.Exec(command, func(err error) tea.Msg { return dependencyResultMsg{err} })
+			}
 			if !key.IsRepeat && !m.building && m.planErr == nil && m.plan != nil {
 				m.stage, m.offset, m.follow = installing, 0, true
 				m.notice = ""
 				m.events = make(chan tea.Msg, 128)
-				engine, plan, events := m.engine, m.plan, m.events
+				engine, plan, events, ids := m.engine, m.plan, m.events, m.ids()
 				// Both commands run outside Update. Progress never blocks Apply;
 				// a burst may skip log lines, but never the final result.
 				return m, tea.Batch(func() tea.Msg {
@@ -346,7 +378,12 @@ func (m *model) key(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 						default:
 						}
 					})
-					events <- resultMsg{result: result, err: err}
+					msg := resultMsg{result: result, err: err}
+					if err == nil {
+						events <- progressMsg("Verificando archivos, dependencias, cuenta y confianza de hooks…")
+						msg.readiness, msg.checkErr = engine.VerifyInstallation(ids)
+					}
+					events <- msg
 					return nil
 				}, waitEvent(events))
 			}
@@ -443,7 +480,10 @@ func (m *model) document() (lines []string, focusStart, focusEnd int) {
 	switch m.stage {
 	case modelSetup:
 		add("Modelos · suscripción ChatGPT", accent)
-		add("Preset: Astra/medium · Sol/xhigh · Spark/medium", muted)
+		add("Preset orientativo: Astra · Sol · Spark · Luna. La revisión ajusta los valores no elegidos a tu cuenta.", muted)
+		if len(m.modelOptions) == 0 {
+			add("Catálogo de cuenta sin verificar; no se pueden elegir modelos todavía.", warning)
+		}
 		add("", plain)
 		for i, role := range installer.ModelRoles {
 			start := len(lines)
@@ -460,6 +500,9 @@ func (m *model) document() (lines []string, focusStart, focusEnd int) {
 			}
 		}
 	case selection:
+		if m.accountErr != nil {
+			add("Cuenta: "+m.accountErr.Error()+" · codex login y c para comprobar", warning)
+		}
 		if len(m.modules) == 0 {
 			add("No hay módulos disponibles.", warning)
 		}
@@ -493,16 +536,29 @@ func (m *model) document() (lines []string, focusStart, focusEnd int) {
 			add(m.resolveErr.Error(), warning)
 		}
 	case preview:
-		add("Revisión · sin cambios aún", accent)
+		add("Revisión · configuración sin cambios aún", accent)
 		add("Destino: "+m.codexHome, muted)
 		add("", plain)
 		if m.building {
 			add("Preparando…", muted)
 		} else if m.planErr != nil {
 			add("No se puede instalar: "+m.planErr.Error(), warning)
+		} else if m.dependencies.NeedsInstall() {
+			add("Primero: instalar dependencias", accent)
+			add(strings.Join(m.dependencies.Missing, ", "), plain)
+			for _, command := range m.dependencies.Commands {
+				add(command.Path+" "+strings.Join(command.Args, " "), plain)
+			}
+			for _, text := range m.dependencies.Warnings {
+				add(text, warning)
+			}
+			add("Enter autoriza estos paquetes y descargas. sudo puede pedir tu contraseña en la terminal. Después revisarás y confirmarás la configuración por separado.", muted)
 		} else if m.plan != nil {
 			for _, role := range installer.ModelRoles {
-				choice := m.choices[role.ID]
+				choice, ok := m.plan.Models[role.ID]
+				if !ok {
+					continue
+				}
 				add(role.Label+": "+choice.Model+" / "+choice.Effort, muted)
 			}
 			names := make([]string, 0, len(m.plan.Modules))
@@ -533,11 +589,29 @@ func (m *model) document() (lines []string, focusStart, focusEnd int) {
 			add("Instalación fallida", warning)
 			add(m.installErr.Error(), warning)
 		} else {
-			add("✓ Instalación completada", accent)
+			if m.readiness.Ready() && m.checkErr == nil {
+				add("✓ Listo para usar: selección verificada", accent)
+			} else {
+				add("Archivos instalados · verificación pendiente", warning)
+			}
 		}
 		add(fmt.Sprintf("Archivos cambiados: %d", m.result.Changed), plain)
 		if m.result.BackupDir != "" {
 			add("Respaldo: "+m.result.BackupDir, plain)
+		}
+		if m.verifying {
+			add("Comprobando…", muted)
+		}
+		if m.checkErr != nil {
+			add(m.checkErr.Error(), warning)
+		}
+		if m.readiness != nil {
+			for _, pending := range m.readiness.Pending {
+				add("Pendiente: "+pending, warning)
+			}
+		}
+		if m.installErr == nil && !m.readiness.Ready() {
+			add("Abre Codex con este CODEX_HOME, revisa /hooks y concede confianza sólo a los hooks que aceptes. Vuelve aquí y pulsa r; no se concede confianza automáticamente.", muted)
 		}
 		if m.installErr != nil && len(m.logs) > 0 {
 			add("", plain)
@@ -567,19 +641,22 @@ func (m *model) View() tea.View {
 		body = append(body, "")
 	}
 	title := []string{"1/3  Módulos", "2/3  Revisión", "3/3  Instalación", "Resultado", "Modelos"}[m.stage]
-	foot := "↑/↓ mover · espacio marcar · m modelos · a todos · n ninguno · enter revisar · q salir"
+	foot := "↑/↓ mover · espacio marcar · m modelos · c cuenta · a todos · n ninguno · enter revisar · q salir"
 	switch m.stage {
 	case modelSetup:
 		foot = "↑/↓ rol · ←/→ modelo · tab esfuerzo · d preset · enter volver"
 	case preview:
 		foot = "enter instalar · r editar · q cancelar"
+		if m.dependencies.NeedsInstall() {
+			foot = "enter autorizar dependencias · r editar · q cancelar"
+		}
 		if m.building || m.planErr != nil {
 			foot = "r editar · q cancelar"
 		}
 	case installing:
 		foot = "instalando · salida bloqueada"
 	case finished:
-		foot = "enter/q cerrar"
+		foot = "r comprobar de nuevo · enter/q cerrar"
 	}
 	if len(lines) > capacity {
 		foot = fmt.Sprintf("↕ %d–%d/%d · PgUp/PgDn · ", offset+1, end, len(lines)) + foot
