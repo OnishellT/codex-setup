@@ -56,7 +56,7 @@ func mutateHookReadiness(name string, status *AccountStatus, group map[string]an
 
 func runHookReadinessCase(t *testing.T, name, template string) {
 	t.Helper()
-	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{readinessHooksFile: &fstest.MapFile{Data: []byte(template)}}, Modules: []Module{{ID: "test", Operations: []Operation{{Kind: "hooks-state", Source: readinessHooksFile}}}}}
+	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{readinessHooksFile: &fstest.MapFile{Data: []byte(template)}}, Modules: []Module{{ID: "test", Operations: []Operation{{Kind: "hooks-state", Source: readinessHooksFile, Root: "codex", Target: readinessHooksFile}}}}}
 	path := filepath.Join(e.CodexHome, readinessHooksFile)
 	doc := decodeJSONObject([]byte(template))
 	if err := expandHookCommands(doc, shellQuote(e.CodexHome)); err != nil {
@@ -64,7 +64,7 @@ func runHookReadinessCase(t *testing.T, name, template string) {
 	}
 	group := doc["hooks"].(map[string]any)["PreToolUse"].([]any)[0].(map[string]any)
 	handlers := group["hooks"].([]any)
-	status := &AccountStatus{HooksFeatureKnown: true, HooksEnabled: true}
+	status := &AccountStatus{HooksFeatureKnown: true, HooksEnabled: true, Models: []ModelOption{{Model: "test", Efforts: []string{"medium"}}}}
 	for _, h := range handlers {
 		status.Hooks = append(status.Hooks, HookStatus{EventName: "preToolUse", StatusMessage: h.(map[string]any)["statusMessage"].(string), SourcePath: path, Enabled: true, TrustStatus: "trusted"})
 	}

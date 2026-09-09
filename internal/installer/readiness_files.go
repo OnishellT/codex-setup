@@ -1,8 +1,8 @@
 package installer
 
 import (
-	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,102 +11,135 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+func readableInstalledFile(path string) error {
+	if err := checkPath(path); err != nil {
+		return err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("no es un archivo normal: %s", path)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	_, err = file.Read(make([]byte, 1))
+	if err == io.EOF {
+		return nil
+	}
+	return err
+}
+
+func (e *Engine) checkInstalledOperation(op Operation) error {
+	if op.Kind == "tree" {
+		return fs.WalkDir(e.assets, op.Source, func(source string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(op.Source, source)
+			if err != nil {
+				return err
+			}
+			target, err := e.target(op.Root, filepath.Join(op.Target, rel))
+			if err != nil {
+				return err
+			}
+			return readableInstalledFile(target)
+		})
+	}
+	switch op.Kind {
+	case "copy", "copy-if-missing", "template-copy", "agent-instructions", "qlty-install", "prewalk-settings", "merge", "append", "developer-instructions", "native-config", "prewalk-config", "hooks-state":
+		target, err := e.target(op.Root, op.Target)
+		if err != nil {
+			return err
+		}
+		return readableInstalledFile(target)
+	}
+	return nil
+}
+
 func (e *Engine) checkInstalledFiles(modules []Module) []string {
 	var pending []string
 	for _, m := range modules {
 		for _, op := range m.Operations {
-			if op.Kind != "copy" && op.Kind != "copy-if-missing" && op.Kind != "tree" && op.Kind != "template-copy" {
-				continue
-			}
-			target, err := e.target(op.Root, op.Target)
-			if err != nil {
+			if err := e.checkInstalledOperation(op); err != nil {
 				pending = append(pending, fmt.Sprintf("%s: %v", m.ID, err))
-				continue
-			}
-			if err = checkPath(target); err != nil {
-				pending = append(pending, fmt.Sprintf("%s: %v", m.ID, err))
-				continue
-			}
-			if op.Kind == "tree" {
-				err = fs.WalkDir(e.assets, op.Source, func(path string, entry fs.DirEntry, walkErr error) error {
-					if walkErr != nil {
-						return walkErr
-					}
-					if entry.IsDir() {
-						return nil
-					}
-					rel, _ := filepath.Rel(op.Source, path)
-					dst, e2 := e.target(op.Root, filepath.Join(op.Target, rel))
-					if e2 != nil {
-						return e2
-					}
-					if e2 = checkPath(dst); e2 != nil {
-						return e2
-					}
-					info, e2 := os.Stat(dst)
-					if e2 != nil || !info.Mode().IsRegular() {
-						return fmt.Errorf("falta archivo de árbol %s", dst)
-					}
-					return nil
-				})
-				if err != nil {
-					pending = append(pending, fmt.Sprintf("%s: %v", m.ID, err))
-				}
-				continue
-			}
-			if _, err = os.Stat(target); err != nil {
-				pending = append(pending, fmt.Sprintf("%s: falta %s", m.ID, op.Target))
 			}
 		}
 	}
 	return pending
 }
 
+func installedModelConfig(path string) (map[string]any, error) {
+	if err := readableInstalledFile(path); err != nil {
+		return nil, err
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var c map[string]any
+	if err := toml.Unmarshal(b, &c); err != nil {
+		return nil, err
+	}
+	for _, key := range []string{"model_provider", "model_providers", "model_catalog_json"} {
+		if _, ok := c[key]; ok {
+			return nil, fmt.Errorf("configuración de proveedor externo sin verificar")
+		}
+	}
+	return c, nil
+}
+
 func (e *Engine) checkInstalledModels(status *AccountStatus, modules []Module) []string {
-	if status == nil {
+	if status == nil || len(status.Models) == 0 {
 		return []string{"cuenta: catálogo no verificado"}
 	}
-	allowed := func(c ModelChoice) bool {
-		for _, m := range status.Models {
-			if m.Model == c.Model {
-				return hasString(m.Efforts, c.Effort)
-			}
+	// Models are only configured by native-config (base/agents), not by standalone hooks.
+	native, prewalk := false, false
+	for _, m := range modules {
+		prewalk = prewalk || m.ID == "prewalk"
+		for _, op := range m.Operations {
+			native = native || op.Kind == "native-config"
 		}
-		return false
+	}
+	if !native && !prewalk {
+		return nil
+	}
+	config, err := installedModelConfig(filepath.Join(e.CodexHome, "config.toml"))
+	if err != nil {
+		return []string{fmt.Sprintf("modelos: %v", err)}
 	}
 	var pending []string
-	check := func(path, label string) {
-		b, err := os.ReadFile(path)
-		if errors.Is(err, os.ErrNotExist) {
-			pending = append(pending, label+": falta "+filepath.Base(path))
-			return
-		}
-		if err != nil {
-			pending = append(pending, label+": no legible")
-			return
-		}
-		var c map[string]any
-		if toml.Unmarshal(b, &c) != nil {
-			pending = append(pending, label+": TOML inválido")
-			return
-		}
-		model, _ := c["model"].(string)
-		effort, _ := c["model_reasoning_effort"].(string)
-		if !allowed(ModelChoice{model, effort}) {
-			pending = append(pending, label+": modelo no está en catálogo")
+	check := func(c map[string]any, modelKey, effortKey, label string) {
+		model, _ := c[modelKey].(string)
+		effort, _ := c[effortKey].(string)
+		if !modelChoiceAvailable(status, ModelChoice{model, effort}) {
+			pending = append(pending, label+": modelo/esfuerzo no disponible en la cuenta")
 		}
 	}
-	check(filepath.Join(e.CodexHome, "config.toml"), "principal")
-	for _, m := range modules {
-		if m.ID != "prewalk" {
+	check(config, "model", "model_reasoning_effort", "principal")
+	agents, _ := config["agents"].(map[string]any)
+	check(agents, "default_subagent_model", "default_subagent_reasoning_effort", "default")
+	if !prewalk {
+		return pending
+	}
+	for _, role := range ModelRoles {
+		if role.ID == "principal" || role.ID == "default" {
 			continue
 		}
-		for _, role := range ModelRoles {
-			if role.ID == "principal" || role.ID == "default" {
-				continue
-			}
-			check(filepath.Join(e.CodexHome, "agents", role.ID+".toml"), role.ID)
+		c, err := installedModelConfig(filepath.Join(e.CodexHome, "agents", role.ID+".toml"))
+		if err != nil {
+			pending = append(pending, fmt.Sprintf("%s: %v", role.ID, err))
+			continue
 		}
+		check(c, "model", "model_reasoning_effort", role.ID)
 	}
 	return pending
 }
