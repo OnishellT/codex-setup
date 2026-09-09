@@ -27,9 +27,6 @@ type AccountStatus struct {
 
 type HookStatus struct {
 	EventName     string
-	HandlerType   string
-	Command       string
-	Matcher       string
 	StatusMessage string
 	SourcePath    string
 	Enabled       bool
@@ -306,14 +303,11 @@ func parseHooks(status *AccountStatus, raw []byte) {
 	var result struct {
 		Data []struct {
 			Hooks []struct {
-				EventName   string  `json:"eventName"`
-				HandlerType string  `json:"handlerType"`
-				Command     string  `json:"command"`
-				Matcher     string  `json:"matcher"`
-				Enabled     bool    `json:"enabled"`
-				Trust       string  `json:"trustStatus"`
-				Message     *string `json:"statusMessage"`
-				Path        string  `json:"sourcePath"`
+				EventName string  `json:"eventName"`
+				Enabled   bool    `json:"enabled"`
+				Trust     string  `json:"trustStatus"`
+				Message   *string `json:"statusMessage"`
+				Path      string  `json:"sourcePath"`
 			} `json:"hooks"`
 			Errors   []struct{ Message, Path string } `json:"errors"`
 			Warnings []string                         `json:"warnings"`
@@ -333,7 +327,7 @@ func parseHooks(status *AccountStatus, raw []byte) {
 			if h.Message != nil {
 				msg = *h.Message
 			}
-			status.Hooks = append(status.Hooks, HookStatus{EventName: h.EventName, HandlerType: h.HandlerType, Command: h.Command, Matcher: h.Matcher, StatusMessage: msg, SourcePath: h.Path, Enabled: h.Enabled, TrustStatus: h.Trust})
+			status.Hooks = append(status.Hooks, HookStatus{EventName: h.EventName, StatusMessage: msg, SourcePath: h.Path, Enabled: h.Enabled, TrustStatus: h.Trust})
 		}
 		for range entry.Errors {
 			status.HookWarnings = append(status.HookWarnings, "hook error reported")

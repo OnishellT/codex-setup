@@ -72,8 +72,8 @@ explorer only when another lane would be dependent, trivial, unsafe, unauthorize
 or no slot is available, and report that reason. Do not split one tightly coupled
 question merely to reach an agent count.
 
-Use the configured `explorer` for normal read-only discovery. Choose
-`fallback_explorer` for simple or bulk lookups;
+Use the configured `explorer` for normal read-only discovery and bulk lookups.
+Reserve `fallback_explorer` for exhausted Spark quota as described below;
 choose `critical_explorer` for ambiguous, security-sensitive
 or high-impact investigation. For implementation, use `prewalk_executor`; retry
 with `fallback_executor` only when the primary executor's model is
