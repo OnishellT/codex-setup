@@ -89,3 +89,10 @@ func TestCLIDependenciesRequireIndependentConsent(t *testing.T) {
 		t.Fatal("dry-run dependency installation accepted")
 	}
 }
+
+func TestCLICheckRejectsEmptyModuleSelection(t *testing.T) {
+	mockCLIAccount(t)
+	if err := runCLIArgs([]string{"--home", t.TempDir(), "--modules", ",, ", "--check"}); err == nil {
+		t.Fatal("empty selection reported ready")
+	}
+}

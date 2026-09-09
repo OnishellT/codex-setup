@@ -15,24 +15,29 @@ func TestReadinessManagedInstructions(t *testing.T) {
 	for _, kind := range []string{"append", "developer-instructions"} {
 		op := Operation{Kind: kind, Source: source, Root: "codex", Target: "instructions"}
 		for _, valid := range []bool{false, true} {
-			data := []byte("user instructions")
-			if valid {
-				var err error
-				data, err = managedBlock(data, []byte("managed policy"), "fixture")
-				if err != nil {
-					t.Fatal(err)
-				}
-			}
-			if kind == "developer-instructions" {
-				data = []byte(fmt.Sprintf("developer_instructions=%q\n", data))
-			}
-			if err := os.WriteFile(target, data, 0600); err != nil {
-				t.Fatal(err)
-			}
-			if err := e.checkInstalledOperation("fixture", op); (err == nil) != valid {
-				t.Fatalf("%s valid=%t: %v", kind, valid, err)
-			}
+			checkManagedInstructionsFixture(t, e, target, op, valid)
 		}
+	}
+}
+
+func checkManagedInstructionsFixture(t *testing.T, e *Engine, target string, op Operation, valid bool) {
+	t.Helper()
+	data := []byte("user instructions")
+	if valid {
+		var err error
+		data, err = managedBlock(data, []byte("managed policy"), "fixture")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if op.Kind == "developer-instructions" {
+		data = []byte(fmt.Sprintf("developer_instructions=%q\n", data))
+	}
+	if err := os.WriteFile(target, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.checkInstalledOperation("fixture", op, false); (err == nil) != valid {
+		t.Fatalf("%s valid=%t: %v", op.Kind, valid, err)
 	}
 }
 
@@ -51,7 +56,7 @@ func TestReadinessMergedConfigPreservesAccountChoiceAndExtraFields(t *testing.T)
 		if err := os.WriteFile(filepath.Join(e.CodexHome, op.Target), []byte(tc.data), 0600); err != nil {
 			t.Fatal(err)
 		}
-		if err := e.checkInstalledOperation("fixture", op); (err == nil) != tc.valid {
+		if err := e.checkInstalledOperation("fixture", op, false); (err == nil) != tc.valid {
 			t.Fatalf("config %q: %v", tc.data, err)
 		}
 	}
@@ -100,12 +105,39 @@ func TestReadinessPrewalkConfigPreservesPermissions(t *testing.T) {
 		if err := os.WriteFile(target, []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
-		if err := e.checkInstalledOperation("fixture", op); (err == nil) != valid {
+		if err := e.checkInstalledOperation("fixture", op, false); (err == nil) != valid {
 			t.Fatalf("valid=%t: %v", valid, err)
 		}
 		after, err := os.ReadFile(target)
 		if err != nil || string(after) != data {
 			t.Fatal("check mutated configuration")
+		}
+	}
+}
+
+func TestReadinessBaseHooksAllowSelectedOverride(t *testing.T) {
+	const source = "config/base.toml"
+	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{source: &fstest.MapFile{Data: []byte("[features]\nhooks=false\n")}}}
+	op := Operation{Kind: "merge", Source: source, Root: "codex", Target: "config.toml"}
+	if err := os.WriteFile(filepath.Join(e.CodexHome, op.Target), []byte("model_provider='openai'\n[features]\nhooks=true\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.checkInstalledOperation("base", op, false); err == nil {
+		t.Fatal("base hooks override accepted without a hooks module")
+	}
+	if err := e.checkInstalledOperation("base", op, true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReadinessProviderMatchesNativeAccount(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "config.toml")
+	for _, provider := range []string{"openai", "", "external"} {
+		if err := os.WriteFile(target, []byte(fmt.Sprintf("model_provider=%q\n", provider)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := installedModelConfig(target); (err == nil) != (provider != "external") {
+			t.Fatalf("provider %q: %v", provider, err)
 		}
 	}
 }

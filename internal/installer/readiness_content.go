@@ -51,7 +51,7 @@ func checkInstalledQlty(target string) error {
 	return nil
 }
 
-func (e *Engine) checkInstalledConfig(op Operation, target string) error {
+func (e *Engine) checkInstalledConfig(op Operation, target string, hooksRequested bool) error {
 	config, err := installedModelConfig(target)
 	if err != nil {
 		return err
@@ -82,7 +82,7 @@ func (e *Engine) checkInstalledConfig(op Operation, target string) error {
 		delete(agents, "default_subagent_model")
 		delete(agents, "default_subagent_reasoning_effort")
 	}
-	if op.Source == "config/base.toml" {
+	if op.Source == "config/base.toml" && hooksRequested {
 		if features, ok := expected["features"].(map[string]any); ok {
 			delete(features, "hooks")
 		}

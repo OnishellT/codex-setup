@@ -20,6 +20,9 @@ func (e *Engine) CheckReadiness(ids []string, status *AccountStatus) (*Readiness
 	if err != nil {
 		return nil, err
 	}
+	if len(modules) == 0 {
+		return nil, fmt.Errorf("selecciona al menos un módulo")
+	}
 	r := &Readiness{}
 	r.Pending = append(r.Pending, e.readinessFilesAndModels(modules, status)...)
 	for _, m := range modules {

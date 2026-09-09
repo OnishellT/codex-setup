@@ -34,7 +34,7 @@ func readableInstalledFile(path string) error {
 	return err
 }
 
-func (e *Engine) checkInstalledOperation(moduleID string, op Operation) error {
+func (e *Engine) checkInstalledOperation(moduleID string, op Operation, hooksRequested bool) error {
 	if op.Kind == "panel" {
 		return e.checkInstalledPanel()
 	}
@@ -54,7 +54,7 @@ func (e *Engine) checkInstalledOperation(moduleID string, op Operation) error {
 	case "qlty-install":
 		return checkInstalledQlty(target)
 	case "merge", "native-config":
-		return e.checkInstalledConfig(op, target)
+		return e.checkInstalledConfig(op, target, hooksRequested)
 	case "append", "developer-instructions":
 		return e.checkInstalledInstructions(moduleID, op, target)
 	case "agent-instructions":
@@ -91,9 +91,15 @@ func (e *Engine) checkInstalledTree(op Operation) error {
 
 func (e *Engine) checkInstalledFiles(modules []Module) []string {
 	var pending []string
+	hooksRequested := false
 	for _, m := range modules {
 		for _, op := range m.Operations {
-			if err := e.checkInstalledOperation(m.ID, op); err != nil {
+			hooksRequested = hooksRequested || op.Kind == "hooks-state"
+		}
+	}
+	for _, m := range modules {
+		for _, op := range m.Operations {
+			if err := e.checkInstalledOperation(m.ID, op, hooksRequested); err != nil {
 				pending = append(pending, fmt.Sprintf("%s: %v", m.ID, err))
 			}
 		}
@@ -113,7 +119,10 @@ func installedModelConfig(path string) (map[string]any, error) {
 	if err := toml.Unmarshal(b, &c); err != nil {
 		return nil, err
 	}
-	for _, key := range []string{"model_provider", "model_providers", "model_catalog_json"} {
+	if value, present := c["model_provider"]; present && value != "" && value != "openai" {
+		return nil, fmt.Errorf("configuración de proveedor externo sin verificar")
+	}
+	for _, key := range []string{"model_providers", "model_catalog_json"} {
 		if _, ok := c[key]; ok {
 			return nil, fmt.Errorf("configuración de proveedor externo sin verificar")
 		}
