@@ -220,11 +220,13 @@ func TestDeveloperInstructionsPreserveUserConfigAndUpdate(t *testing.T) {
 		{Kind: "developer-instructions", Root: "codex", Target: "config.toml", Source: "prewalk.md"},
 	}}}, map[string]string{"prewalk.md": "Automatic Prewalk v1"})
 	filename := filepath.Join(engine.CodexHome, "config.toml")
-	writeFixture(t, filename, "model = 'user-model'\ndeveloper_instructions = 'Keep my instructions.'\n[features]\nhooks = false\n", 0600)
+	writeFixture(t, filename, "model = 'user-model'\nsandbox_mode = 'workspace-write'\napproval_policy = 'on-request'\napprovals_reviewer = 'auto_review'\ndeveloper_instructions = 'Keep my instructions.'\n[features]\nhooks = false\n", 0600)
 	applyPlan(t, engine, buildPlan(t, engine, "prewalk"))
 	want := "Keep my instructions.\n\n<!-- codex-setup:prewalk -->\nAutomatic Prewalk v1\n<!-- /codex-setup:prewalk -->\n"
 	got := readTOML(t, filename)
-	if got["developer_instructions"] != want || got["model"] != "user-model" || got["features"].(map[string]any)["hooks"] != false {
+	if got["developer_instructions"] != want || got["model"] != "user-model" ||
+		got["sandbox_mode"] != "workspace-write" || got["approval_policy"] != "on-request" ||
+		got["approvals_reviewer"] != "auto_review" || got["features"].(map[string]any)["hooks"] != false {
 		t.Fatalf("unexpected configuration: %#v", got)
 	}
 	assertIdempotent(t, engine, "prewalk")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -25,6 +26,7 @@ func runCLI() error {
 	dry := flag.Bool("dry-run", false, "Vista previa sin instalar (con --modules o selección predeterminada)")
 	yes := flag.Bool("yes", false, "Confirma instalación no interactiva; requiere --modules")
 	list := flag.Bool("list", false, "Lista módulos disponibles")
+	models := flag.String("models", "", "JSON de modelo/esfuerzo por rol; sin él se usa el preset nativo (modo --modules)")
 	flag.Parse()
 	if flag.NArg() != 0 {
 		return fmt.Errorf("argumentos inesperados: %s", strings.Join(flag.Args(), " "))
@@ -54,6 +56,9 @@ func runCLI() error {
 		return fmt.Errorf("--yes requiere --modules; no se selecciona todo implícitamente")
 	}
 	if *modules == "" && !*dry {
+		if *models != "" {
+			return fmt.Errorf("--models requiere --modules o --dry-run; usa m en el TUI")
+		}
 		return ui.Run(engine)
 	}
 	ids := []string{}
@@ -70,7 +75,17 @@ func runCLI() error {
 			}
 		}
 	}
-	plan, err := engine.BuildPlan(ids)
+	var choices map[string]installer.ModelChoice
+	if *models != "" {
+		b, readErr := os.ReadFile(*models)
+		if readErr != nil {
+			return readErr
+		}
+		if err = json.Unmarshal(b, &choices); err != nil {
+			return fmt.Errorf("JSON de modelos inválido: %w", err)
+		}
+	}
+	plan, err := engine.BuildPlanWithModels(ids, choices)
 	if err != nil {
 		return err
 	}
@@ -96,6 +111,6 @@ func runCLI() error {
 		return err
 	}
 	fmt.Printf("Instalación lista: %d archivos. Respaldo: %s\n", result.Changed, result.BackupDir)
-	fmt.Println("Abre una terminal nueva. Uso: codex --yolo / codex --profile work. CODEX_PANEL_DISABLE=1 codex omite el panel.")
+	fmt.Println("Abre una terminal nueva: codex / codex --profile work. CODEX_PANEL_DISABLE=1 codex omite el panel.")
 	return nil
 }

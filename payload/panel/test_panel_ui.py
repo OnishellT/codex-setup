@@ -2,7 +2,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-from panel_ui import LABELS, card_rows, communication, detail_lines, draw_cards, number, duration, run
+from panel_ui import LABELS, card_rows, communication, context_input, detail_lines, draw_cards, number, duration, run
 
 
 def snapshot():
@@ -79,6 +79,13 @@ class UItests(unittest.TestCase):
         self.assertIn("Est. quota share ~20.0% of session", text)
         self.assertIn("Tokens 300", text)
         self.assertNotIn("Quota cost", text)
+
+    def test_context_input_uses_latest_request_not_session_total(self):
+        data = snapshot()
+        main = data["principal"]
+        main.update({"context_input_tokens": 127_593, "model_context_window": 258_400})
+        self.assertEqual(context_input(main, LABELS["en"]), "Context input 127.6k / 258.4k (49.4%)")
+        self.assertEqual(context_input({}, LABELS["es"]), "Entrada contexto —")
 
     def test_account_meter_zero_stale_missing_and_reset(self):
         from panel_ui import quota_rows

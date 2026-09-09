@@ -1,0 +1,9 @@
+{
+  "warning_percent": 70,
+  "critical_percent": 85,
+  "handoff_max_chars": 12000,
+  "model_thresholds": {
+    "gpt-5.6": {"warning_tokens": 250000, "critical_tokens": 272000},
+    "gpt-5.6-sol": {"warning_tokens": 250000, "critical_tokens": 272000}
+  }
+}

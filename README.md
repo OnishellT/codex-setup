@@ -41,31 +41,141 @@ el panel Linux se rechaza explícitamente. macOS no está validado.
 
 | ID | Qué instala | Selección inicial |
 |---|---|---|
-| `base` | Sol/high, tema Dracula global y flags del setup actual | Sí |
+| `base` | Astra/medium, tema Dracula y autenticación ChatGPT | Sí |
 | `profiles` | `personal.config.toml` con Catppuccin Mocha y `work.config.toml` | Sí |
-| `agents` | Configuración Terra/medium, máximo 2 agentes e instrucciones eager | Sí |
-| `prewalk` | Orquestador automático desde config + ejecutor nativo Terra/medium | Sí |
+| `agents` | Hasta 4 agentes, defaults Spark/medium, MultiAgent V2 e instrucciones eager | Sí |
+| `prewalk` | Dispatcher compacto + skill automática, executor Spark/medium y reviewer Sol/xhigh | Sí |
 | `rtk` | Hook de RTK para reducir la salida de comandos Bash | Sí |
 | `ponytail` | Ponytail 4.9.0: tres hooks de simplicidad y seis skills oficiales | Sí |
+| `context-handoff` | Alertas de contexto activo y skill `$handoff` compacta | Sí |
+| `zg` | MCP de búsqueda semántica sobre un índice local existente | No |
 | `panel` | Integración de `codex` en Bash/Zsh, menú lateral, logs, tokens y cuota | Sí |
 
-`prewalk` requiere `agents`; `panel` requiere `agents` y `profiles`; `profiles` requiere `base`;
-las dependencias se resuelven incluso en modo CLI. Desmarcar un módulo **no
-desinstala** instalaciones anteriores.
+`prewalk` requiere `agents`; `panel` requiere `agents` y `profiles`; `profiles` requiere `base`.
+Desmarcar un módulo no desinstala archivos anteriores.
 
-`rtk` y `ponytail` son independientes de `base` y de los perfiles: puedes
-instalarlos sin restablecer modelo, tema ni ajustes personales existentes. Ambos
-escriben únicamente sus grupos identificados en `$CODEX_HOME/hooks.json`,
-preservan hooks ajenos y activan sólo `features.hooks = true`; no habilitan
-plugins. Codex pedirá la confianza de cada hook: después de instalar, revisa y
-aprueba los marcados `[codex-setup:rtk]` y `[codex-setup:ponytail]` mediante
-`/hooks`. El instalador no usa `--dangerously-bypass-hook-trust` ni auto-confía
-los hooks.
+## Modelos de la suscripción ChatGPT
 
-RTK exige Python 3 y `rtk >= 0.23` disponible en el PATH de Codex. Ponytail
-exige Python 3 y Node.js >= 18. No se descargan binarios, dependencias npm ni
-plugins. Consulta los README instalados en `$CODEX_HOME/integrations/rtk/` y
-`$CODEX_HOME/integrations/ponytail/` para la desactivación y sus límites.
+El setup usa sólo autenticación ChatGPT y el catálogo nativo de Codex. No instala
+proveedores externos, gateways, servicios Docker ni credenciales de API.
+Al confirmar los módulos de modelos se retiran `model_provider`,
+`model_providers` y `model_catalog_json` de los archivos gestionados.
+Se habilita MultiAgent V2 y `forced_login_method = "chatgpt"`.
+
+| Rol | Preset |
+|---|---|
+| Principal | GPT-6 Astra / medium |
+| Reviewer | GPT-5.6 Sol / xhigh |
+| Executors, explorers y subagente genérico | GPT-5.3 Codex Spark / medium |
+
+El principal queda fijo en Astra/medium. En el TUI pulsa **m** desde Módulos:
+↑/↓ elige subagente, ←/→ cambia modelo,
+Tab cambia esfuerzo y **d** restaura el preset. Enter vuelve a los módulos;
+la vista previa muestra la matriz antes de escribir. Las elecciones se aplican
+después de las plantillas, sin modificar permisos o instrucciones personalizadas.
+El catálogo de opciones procede de `codex debug models --bundled`, no del
+proveedor activo. Si Codex no está instalado, se ofrece el preset conocido.
+Spark se incluye explícitamente porque algunas versiones lo omiten del catálogo
+incluido; su acceso depende de la suscripción. `model_reasoning_summary = "none"`
+evita enviar a Spark el campo de resumen que rechaza; no desactiva su razonamiento.
+
+Para automatizar, `--models roles.json` acepta un objeto parcial como:
+
+```json
+{"prewalk_executor":{"model":"gpt-5.6-sol","effort":"medium"}}
+```
+
+```sh
+./install.sh --modules base,prewalk,profiles --models roles.json --dry-run
+./install.sh --modules base,prewalk,profiles --models roles.json --yes
+```
+
+Los roles omitidos usan el preset. Modelos o esfuerzos no admitidos se rechazan
+antes de escribir. Reinicia Codex después de cambiar configuración. Migrar
+configuración no elimina automáticamente servicios o credenciales externos:
+retíralos sólo después de comprobar la ruta nativa y terminar sesiones dependientes.
+
+## zg opcional
+
+`./install.sh --modules zg --yes` añade una configuración MCP conservadora y un
+bloque de guía a `$CODEX_HOME` y lo deja con `enabled = true` para work y personal.
+El módulo sigue siendo opcional en el menú. Está destinado únicamente
+a un índice local existente y pertinente; no crea, reconstruye ni borra índices,
+ni descarga paquetes, modelos o binarios. Conserva las instrucciones ajenas,
+Prewalk y el resto de la configuración; reaplicar `zg` repone su propio bloque.
+
+Antes de instalar el módulo, prepara Node.js **>= 22** y la versión fija
+`@zvec/zvec-grep@0.2.1`. El setup verifica los requisitos antes de escribir:
+si faltan o el parche Linux no es válido, aborta con un error, no instala una
+entrada desactivada. No descarga ni instala estas dependencias:
+
+```sh
+npm install -g @zvec/zvec-grep@0.2.1
+# Sólo si sharp detecta libvips global y la instalación falla:
+SHARP_IGNORE_GLOBAL_LIBVIPS=1 npm install -g @zvec/zvec-grep@0.2.1
+```
+
+Al activarse, MCP usa stdio con `zg server --stdio --mcp-toolset agent`, que
+inicia su daemon; sólo ofrece `zvec_grep_search`, no es obligatorio y usa
+aprobación `auto`. Esto puede requerir confirmación; con `approval_policy = "never"`
+la llamada puede bloquearse y se usa `rg`, sin aprobar herramientas globalmente.
+
+En Linux, PR 86 debe aplicarse y verificarse antes de instalar el módulo. El issue
+upstream [#92](https://github.com/zvec-ai/zvec-grep/issues/92) se mitiga por
+búsqueda con freshness, no confiando en la indexación en segundo plano ni con un
+daemon alternativo. Tanto las instalaciones nuevas como las reinstalaciones
+del módulo quedan habilitadas después de superar la comprobación.
+
+El módulo incluye el helper manual y reversible de PR 86. El instalador reutiliza
+su verificación de sólo lectura; nunca aplica ni revierte el parche, ni inicia
+MCP. Después de instalar el paquete, revisa el helper y, sólo en Linux, aplícalo
+desde la carpeta del setup antes de instalar el módulo:
+
+```sh
+node payload/integrations/zg/pr86-watch-manager.mjs apply
+node payload/integrations/zg/pr86-watch-manager.mjs check
+./install.sh --modules zg --yes
+```
+
+Sólo acepta `@zvec/zvec-grep@0.2.1` y hashes conocidos, crea una única copia
+original y falla cerrado ante una versión, contenido o backup desconocidos. Para
+revertirlo explícitamente: `node "${CODEX_HOME:-$HOME/.codex}/integrations/zg/pr86-watch-manager.mjs" restore`.
+Detén antes el daemon correspondiente con `zg server off` (afecta a sus otras
+sesiones). Reinstalar npm puede borrar el parche; comprueba su estado nuevamente.
+La comprobación exige que `zg` en PATH corresponda al paquete global validado.
+Se hace en la máquina donde ejecutas el instalador, no en una máquina remota
+indicada por `--home`. No es una vigilancia permanente: valida otra vez tras
+actualizar dependencias. Si trasladas sólo el binario y falta el parche, lleva
+también `payload/integrations/zg/` para preparar el paquete. macOS no está validado
+y no recibe el parche Linux.
+
+Mantén los índices del modelo local `potion-code-16m-v2` limitados al repositorio
+elegido explícitamente, nunca a `$HOME`. Un índice local no implica resultados
+ocultos de un proveedor. Crear un índice requiere una acción explícita del usuario:
+
+```sh
+zg index /ruta/repo --embedding local/potion-code-16m-v2 --device cpu
+```
+
+Si se usa un servicio loopback, su token opcional se gestiona fuera del setup:
+aquí no se almacenan secretos ni variables de entorno. Usa zg sólo si existe un
+índice pertinente **y** la búsqueda es conceptual o la ubicación es desconocida;
+para búsqueda exacta o exhaustiva usa `rg` y verifica el archivo actual. Si no
+hay índice o zg falla, vuelve a `rg`.
+
+El orquestador y todos los subagentes deben añadir explícitamente
+`freshness: "wait_for_fresh"` a cada `zvec_grep_search`. Es una instrucción para
+el agente, no una configuración por defecto del servidor. Si devuelve
+`possibly_stale`, `timeout` o `error`, se descarta el resultado, se usa `rg` y se
+comprueba el archivo vivo. No se confía en indexación en segundo plano para
+freshness: ésa es la mitigación de #92 sólo por búsqueda.
+
+No ejecutes `zg install`: gestiona configuración, AGENTS y aprobaciones por fuera
+de este setup. Para dejarlo desactivado, establece `enabled = false` en
+`[mcp_servers.zvec_grep]` y ejecuta `zg server off`. Esto detiene el daemon
+compartido y por ello afecta a otras sesiones o herramientas que lo usen, pero no
+borra los índices. Reaplicar el módulo vuelve a habilitarlo tras verificar los
+requisitos, pero conserva el resto de `config.toml` y Prewalk.
 
 Ponytail inyecta sus instrucciones por hooks y también instala `ponytail`,
 `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help` y
@@ -77,43 +187,234 @@ skill oficial para Codex que instalar.
 
 DFM **no está integrado** y no se presenta como instalable. Las skills oficiales
 de `.system` las gestiona Codex; este setup solo empaqueta y registra las seis
-skills de Ponytail, sin restaurar otras skills retiradas. El instalador no ejecuta scripts adicionales, instala dependencias
-ni proporciona credenciales.
+skills de Ponytail, sin restaurar otras skills retiradas. El instalador ejecuta
+comprobaciones de requisitos e instala la copia gestionada de Qlty incluida por
+Prewalk, pero no proporciona credenciales.
 
 Los perfiles heredan la configuración compartida y no representan cuentas
 distintas. Su formato y los ajustes de agentes siguen la [referencia oficial de
 Codex](https://learn.chatgpt.com/docs/config-file/config-reference).
 
+## Alertas de contexto y `$handoff`
+
+El módulo `context-handoff`, habilitado por defecto, usa el último evento
+`token_count` para mostrar la **entrada activa** frente a la ventana del modelo;
+no confunde ese valor con los tokens acumulados de toda la tarea. El panel lateral
+lo muestra como `Entrada contexto 184k / 258k (71%)`. Un hook avisa una sola vez
+al cruzar 70% y otra al cruzar 85%; `/compact` reinicia esos avisos. Los umbrales
+y el máximo de 12 000 caracteres se pueden cambiar en
+`$CODEX_HOME/integrations/handoff/settings.json`. El instalador crea ese archivo
+sólo si falta y conserva personalizaciones posteriores. GPT-5.6 Sol además avisa
+preventivamente a 250 000 tokens y marca crítico a 272 000, antes del recargo por
+contexto largo documentado para solicitudes con más de 272K tokens; los demás
+modelos usan los porcentajes generales. Ese umbral refleja precios de API; una
+suscripción o un gateway puede contabilizar la cuota de otra manera.
+
+`$handoff` crea un Markdown privado y acotado bajo
+`$CODEX_HOME/handoffs/<proyecto>/<id>.md`, captura el estado Git y pide completar
+sólo objetivo, decisiones, trabajo hecho/pendiente, archivos, validaciones,
+riesgos y próximo paso. No copia conversaciones, razonamiento oculto, secretos,
+salidas grandes ni diffs completos. Después de validarlo devuelve un comando de
+esta forma:
+
+```sh
+codex -C '/ruta/al/proyecto' '$handoff resume <id>'
+```
+
+La nueva tarea relee las reglas y archivos vivos y compara proyecto, rama, HEAD,
+estado sucio y worktrees antes de continuar. No archiva la tarea anterior, no
+hace commit/push y no inicia otra instancia por sí sola. Las alertas requieren
+revisar y confiar el hook con `/hooks`; la skill sigue disponible aunque el hook
+no esté confiado o el panel esté desactivado.
+
 ## Prewalk automático
 
-`./install.sh --modules prewalk --yes` añade un bloque gestionado a
+`./install.sh --modules prewalk --yes` añade un dispatcher gestionado y compacto a
 `developer_instructions` en `$CODEX_HOME/config.toml`, conserva las instrucciones
-anteriores e instala `agents/prewalk_executor.toml`. No cambia el modelo principal,
-los perfiles ni los hooks; no necesita panel, Python, Node, plugins ni una skill.
+anteriores e instala la skill automática `$CODEX_HOME/skills/prewalk/SKILL.md`,
+registrada como enabled, además de los roles de exploración, ejecución/fallback y
+`agents/engineering_reviewer.toml`,
+helpers de Git/Qlty y hooks de revisión. Requiere Python 3.8+, Git, `tar` con
+soporte xz y conexión en la primera instalación: descarga Qlty 0.644.0 desde su
+release oficial, verifica
+su SHA-256 y lo instala en `$CODEX_HOME/integrations/prewalk/bin`. En Linux usa
+el binario musl estático, compatible también con sistemas glibc. No ejecuta
+scripts remotos. Qlty descarga los analizadores necesarios al preparar o analizar
+un proyecto. Qlty usa BSL/Fair Source: revisa su licencia si ofrecerás este setup
+como servicio a terceros. No necesita
+panel, Node ni plugins de Codex. El módulo `agents`, dependencia de
+Prewalk, aplica el preset nativo incluido el principal Astra/medium. La selección
+de modelos no altera las aprobaciones; el módulo Prewalk añade sus defaults sólo
+cuando no hay una elección de permisos. Revisa y confía el hook con `/hooks`:
+habilitar hooks no equivale a confiar en ellos.
 Funciona con cualquier `CODEX_HOME` soportado por el instalador.
 
+Al comenzar una implementación, el planner prepara Git y ejecuta `quality.py setup`.
+Si ya existe `.qlty/qlty.toml`, lo conserva y valida; si falta, Qlty detecta el
+proyecto y el helper confirma únicamente su configuración en un commit separado,
+dejando una baseline limpia que comparten los worktrees. El planner contrasta lo
+detectado con manifests y configuraciones existentes. En un repositorio todavía
+vacío, repite esa revisión cuando aparezcan los manifests del lenguaje. Todas las
+ejecuciones fuerzan `QLTY_TELEMETRY=off` y desactivan el chequeo de actualizaciones.
+El helper usa primero la copia gestionada por el instalador y recurre a `qlty` de
+`PATH` sólo si aquella no existe. `quality` está habilitado cuando vale `true` o
+no existe en `settings.json`; ponlo
+en `false` para desactivarlo conscientemente. La versión local validada es Qlty
+0.644.0 y cada reporte registra la versión realmente utilizada.
+
 En tareas de implementación no triviales, el orquestador explora y prepara un
-plan breve, delega la ejecución y pruebas, y verifica el resultado. No requiere
+plan breve, delega la ejecución y pruebas, obtiene una revisión independiente
+y verifica el resultado. El revisor también se invoca si el principal implementó
+directamente un cambio no trivial. No requiere
 que el usuario controle el cierre: el principal debe esperar la finalización
 confirmada de sus agentes; recibir un informe no equivale a que hayan terminado.
-No requiere
-`/prewalk` ni pedirlo en cada prompt. Consultas, planes sin autorización para
-implementar y cambios mínimos se resuelven directamente. Es una política nativa
-de instrucciones, no el cambio de modelo dentro de la misma sesión de OMP.
+No requiere `$prewalk` ni pedirlo en cada prompt: el dispatcher carga la skill
+automáticamente sólo para las solicitudes que cumplen sus disparadores.
+Consultas, planes sin autorización para implementar y cambios mínimos se
+resuelven directamente. Es una política nativa de instrucciones y skill, no el
+cambio de modelo dentro de la misma sesión de OMP.
 
 Work y personal heredan la activación compartida. Para apagar sólo Prewalk,
 retira de `developer_instructions` el bloque entre `<!-- codex-setup:prewalk -->`
-y `<!-- /codex-setup:prewalk -->`, preservando el resto. No apagues todos los
-subagentes. Reinstalar el módulo vuelve a activarlo. Un perfil que redefine
-`developer_instructions` debe conservar ese bloque si quiere usar Prewalk.
+y `<!-- /codex-setup:prewalk -->`, preservando el resto, y establece en
+`skills.config` la entrada de `$CODEX_HOME/skills/prewalk/SKILL.md` con
+`enabled = false`. No apagues todos los subagentes. Reinstalar el módulo vuelve
+a activarlo. Un perfil que redefine `developer_instructions` debe conservar ese
+bloque y la entrada enabled si quiere usar Prewalk.
 
-El TOML del ejecutor se crea sólo si no existe: reinstalar conserva tus cambios
-de modelo, proveedor e instrucciones (también conserva una plantilla antigua;
-las actualizaciones de ese rol se revisan manualmente).
-El modelo del ejecutor se configura en su TOML; inicialmente usa Terra/medium e
-hereda el proveedor. Para futuros proveedores, configura modelo y proveedor como
-pareja mediante las opciones nativas y verifica su compatibilidad antes de usar
-datos reales. Prewalk no añade un router ni copia credenciales.
+El módulo usa las operaciones gestionadas `developer-instructions`, `template-copy`,
+`skills-state`, `agent-instructions`, `tree`, `qlty-install`,
+`prewalk-settings`, `prewalk-config`, `native-config` y `hooks-state`.
+
+Los modelos elegidos en el instalador se aplican explícitamente a cada rol.
+Se conservan instrucciones y permisos personalizados; las instrucciones generadas
+conocidas se actualizan. Los fallbacks son roles explícitos y pueden configurarse
+con un modelo nativo diferente; el preset usa Spark para todos los writers/explorers.
+El hook global se actualiza sin borrar hooks ajenos. Los scripts de
+`integrations/prewalk` se actualizan con respaldo; personaliza settings y roles,
+no las copias gestionadas de scripts.
+
+### Workers paralelos en worktrees
+
+El planner investiga reglas/patrones y entrega contratos: objetivo, interfaz,
+archivos permitidos, exclusiones, dependencias y aceptación; no escribe el código
+línea por línea. Hasta cuatro contratos independientes pueden ejecutarse en
+paralelo con `prewalk_executor`, cada uno en su rama/worktree. El planner usa el
+menor número de workers que cubra el trabajo independiente. Cada comando y edición debe
+usar la ruta absoluta asignada; los subagentes nativos no cambian automáticamente
+de directorio por una instrucción `cd` anterior. Es separación de checkouts, no
+un sandbox entre workers: puertos, DB, credenciales y procesos siguen compartidos.
+Para investigación read-only no trivial, dos o más líneas independientes se
+delegan simultáneamente a explorers; el principal conserva decisiones y síntesis.
+Si sólo usa uno, debe explicar qué impidió una segunda línea útil.
+
+`$CODEX_HOME/integrations/prewalk/settings.json` contiene `worktrees: true` y
+`max_workers: 4`. Es configuración del **setup**, no claves inventadas de Codex.
+Reinstalar migra la plantilla anterior de 2 a 4 y conserva archivos personalizados.
+Usa `max_workers: 1` para ejecución serial aislada. También se respeta la
+concurrencia nativa. Todo writer delegado requiere manifest/worktree; deshabilitar
+worktrees no autoriza writers en el checkout compartido. Las explicaciones y
+cambios triviales que no activan Prewalk pueden resolverse directamente.
+
+Antes de escribir archivos de un proyecto nuevo, Prewalk ejecuta
+`python3 "$CODEX_HOME/integrations/prewalk/worktrees.py" prepare --repo RUTA`.
+Si la carpeta está vacía y fuera de Git, inicializa el repositorio y crea un
+commit con un `.gitignore` mínimo; no agrega secretos ni otros archivos.
+Reutiliza repositorios existentes, incluidos los de una carpeta padre, sin crear
+repositorios anidados. Usa tu identidad Git configurada: si falta, avisa sin
+inventarla ni cambiar configuración global. Una carpeta no vacía sin Git requiere
+inspeccionar y autorizar explícitamente qué archivos formarán la base inicial;
+no se hace `git add .` automático. Consultas, revisiones y planes sin autorización
+para implementar no inicializan Git. No requiere GitHub ni un remoto.
+Al probarlo con `codex exec` desde una carpeta sin Git, usa
+`--skip-git-repo-check` para que el CLI permita arrancar antes de la preparación;
+esto no concede permisos de escritura ni sustituye la identidad Git.
+
+El helper `integrations/prewalk/worktrees.py` ofrece `prepare --repo RUTA`,
+`create --repo RUTA --workers N --max-workers 4`,
+`integrate --manifest RUTA` y `finish --manifest RUTA`. Crea un manifest y worktrees
+bajo `$CODEX_HOME/worktrees/prewalk`, con permisos privados `0700`
+(`--session-parent` permite otra carpeta existente fuera del checkout).
+Exige baseline limpio/committeado, rama y ausencia de operaciones Git pendientes;
+no admite submódulos. No hace stash, push ni descarta cambios. Instrucciones locales
+ignoradas no se copian: el planner debe comprobar los avisos y aportar las reglas
+aplicables. Si faltan requisitos, informa y se detiene sin writers compartidos.
+Antes de integrar, compara los paths modificados por todos los workers y se detiene
+sin aplicar commits si dos tocaron el mismo archivo. Ese archivo debe replanificarse
+en serie; nunca se elige un ganador automático.
+Crear ramas y commits requiere escritura en los metadatos Git. `workspace-write`
+puede mantener `.git` de sólo lectura: se usa la aprobación normal para esa operación
+si está disponible; si se deniega o no puede solicitarse, se informa y se detiene.
+El instalador configura `workspace-write`, `on-request` y `auto_review` cuando
+no existen elecciones de permisos, y añade sólo la raíz privada escribible.
+No habilita `--yolo` y conserva permisos personalizados con un aviso.
+
+Antes de cada spawn, el planner ejecuta `writer_guard.py register --manifest RUTA
+--worker worker-1 --task nombre_de_tarea`. El registro queda vinculado al
+`CODEX_THREAD_ID` nativo y al nombre de tarea. V2 cifra los mensajes antes del hook;
+el guard comprueba este registro sin descifrarlos, valida el worktree y reserva
+cada worker una sola vez. Un fallback usa `--role fallback_executor` y un worktree
+nuevo. Los hooks requieren revisión de confianza nativa; no son aislamiento de SO.
+
+Workers entregan commits y pruebas. El principal comprueba el alcance, integra en
+orden, ejecuta pruebas conjuntas y solicita revisión del resultado combinado. Los
+conflictos se preservan para resolución explícita. `finish` sólo hace fast-forward
+si el checkout original sigue limpio, en la rama/base inicial y todos los workers
+están integrados. Las correcciones de review se realizan sobre el código integrado.
+No hay limpieza automática: los worktrees y ramas de la sesión quedan recuperables.
+
+Cada worker confirma sólo sus cambios y verifica que su worktree esté limpio
+antes de ejecutar `quality.py scan`. La integración ejecuta el mismo scan contra el SHA
+base exacto. El helper reúne lint en SARIF, smells en SARIF y métricas por función
+en JSON, sin autofix ni IA. Una herramienta ausente, error o salida inválida no se
+interpreta como pass. El reviewer recibe el reporte normalizado para enfocar su
+inspección, pero la complejidad ciclomática/cognitiva no se presenta como una
+medición de CPU, memoria o latencia. Las pruebas y benchmarks propios del proyecto
+siguen siendo obligatorios cuando el riesgo lo justifica.
+Los reportes se escriben fuera del repositorio y registran HEAD, upstream, hash de
+configuración y versión de Qlty para detectar evidencia obsoleta o del worktree
+equivocado.
+
+### Revisión adversarial de ingeniería
+
+`engineering_reviewer` es un rol separado del implementador, utilizable también
+para una revisión explícita fuera de Prewalk. Recibe petición original, plan,
+criterios de aceptación, base del diff y ubicaciones del código y pruebas;
+inspecciona el código actual y las instrucciones aplicables del proyecto.
+Se crea con `fork_turns="none"` (`fork_context=false` en la API antigua), sin
+conversaciones, resúmenes ni justificaciones del implementador. Cada re-review
+también parte de contexto nuevo. El hook global `PreToolUse` rechaza crear este
+rol sin una elección explícita de contexto limpio. El mismo hook filtra por
+`agent_type=engineering_reviewer` (verificado en CLI 0.153.2) y
+bloquea accesos detectados a sesiones, archivos de historial, memorias, bases de
+datos de historial y herramientas de consulta de conversaciones; no lee sus contenidos.
+Resuelve rutas/symlinks evidentes y funciona con un `CODEX_HOME` personalizado.
+
+Es una protección práctica, **no aislamiento de seguridad absoluto**: un filtro
+puede omitir accesos indirectos u ofuscados; herramientas especializadas pueden
+omitir hooks, y `write_stdin` no repite `PreToolUse`. Si faltan Python, confianza
+o la metadata de rol, la revisión protegida no está verificada y debe informarse. No se
+instala un bypass de confianza ni se alteran sandbox/aprobaciones.
+
+Comprueba ocho áreas: propósito, corrección, reglas del proyecto, rendimiento,
+diseño, seguridad/fiabilidad, pruebas e integración. Devuelve hallazgos P0-P3 con
+ubicación, escenario, impacto, evidencia y sugerencia; cada área queda marcada
+como `verified`, `finding`, `N/A` o `not verified`. Puede cuestionar el plan y no
+confunde ausencia de hallazgos con demostración de corrección. No exige benchmarks
+triviales ni bloquea por preferencias de estilo.
+
+El principal espera a que termine el ejecutor y el diff esté estable antes de
+revisar; resuelve los hallazgos y solicita revisión de las correcciones y sus
+interacciones. Si falta el revisor o evidencia esencial, lo informa sin simular
+una aprobación. Se mantienen hasta cuatro agentes y una sola profundidad.
+
+El rol pide `sandbox_mode = "read-only"`, deshabilita su propia delegación y tiene
+instrucciones de no modificar la solución. Si una prueba requiere escrituras,
+solicita al principal ejecutarla. No modifica aprobaciones. Los overrides del
+arranque, incluidos `--sandbox workspace-write` y `--yolo`, pueden prevalecer
+sobre el sandbox del rol (observado en una prueba CLI): esto no es
+una barrera de seguridad independiente. La invocación y checklist son instrucciones
+para el modelo, no un bloqueo determinista de CI ni una garantía de calidad.
 
 La configuración usa [instrucciones nativas](https://learn.chatgpt.com/docs/config-file/config-reference)
 y [agentes personalizados](https://learn.chatgpt.com/docs/agent-configuration/subagents).
@@ -187,8 +488,10 @@ solo el bloque `codex-setup:launcher` de los archivos del shell o restaura su
 respaldo; deja intactos los demás contenidos. No se instala un alias de `--yolo`.
 
 El panel conserva Ctrl-S para ocultar/mostrar, flechas + Enter para abrir un
-agente y **solo Enter** para cerrar el flotante. No modifica `.tmux.conf` ni otras
-sesiones. Más detalles en [payload/panel/README.md](payload/panel/README.md).
+agente y **solo Enter** para cerrar el flotante. Al terminar Codex, el supervisor
+cierra automáticamente la sesión tmux aislada y su monitor; Ctrl-b d sigue siendo
+un simple detach reconectable. No modifica `.tmux.conf` ni otras sesiones. Más
+detalles en [payload/panel/README.md](payload/panel/README.md).
 
 La consulta de cuota ocurre al abrir el panel, no al instalar. Para desactivarla:
 `CODEX_PANEL_QUOTA_OFFLINE=1 codex-panel -p personal`. La estimación por agente no
@@ -223,6 +526,7 @@ La apariencia depende también del tema del emulador de terminal del equipo dest
 ./install.sh --list
 ./install.sh --modules agents,profiles --dry-run
 ./install.sh --modules rtk,ponytail --yes
+./install.sh --modules context-handoff --yes
 
 # Prueba aislada (no cambia el HOME real ni copia autenticación)
 destino_prueba=$(mktemp -d)
@@ -258,6 +562,8 @@ Operaciones disponibles:
 - `append`: añadir/reemplazar un bloque gestionado en un archivo de instrucciones.
 - `hooks-state`: combinar grupos de `hooks.json` propiedad del módulo, sin
   reemplazar hooks ajenos, y activar el flag de hooks al final del plan.
+- `native-config`: aplicar la matriz nativa validada y retirar configuración externa.
+- `prewalk-config`: permisos nativos y raíz privada para worktrees.
 - `panel`: adaptación específica del lanzador, chequeos y terminfo.
 
 Raíces permitidas: `home`, `codex`, `skills`, `data` y `bin`. Los destinos son relativos;

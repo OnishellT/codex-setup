@@ -21,11 +21,13 @@ def request(response="r1", usage=None, total=None, ordinal=1):
     return {"type": "token_usage_record", "ordinal": ordinal, "payload": payload}
 
 
-def snapshot(total=None, ordinal=2):
+def snapshot(total=None, ordinal=2, last=None, window=None):
+    info = {"total_token_usage": total if total is not None else counts(),
+            "last_token_usage": last if last is not None else counts()}
+    if window is not None:
+        info["model_context_window"] = window
     return {"type": "event_msg", "ordinal": ordinal,
-            "payload": {"type": "token_count", "info": {
-                "total_token_usage": total if total is not None else counts(),
-                "last_token_usage": counts()}}}
+            "payload": {"type": "token_count", "info": info}}
 
 
 def message(id="m1", sender="/root", recipient="/root/child", timestamp="now"):
@@ -58,7 +60,18 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(t.summary(), {
             "identity": "child", "tokens": 120, "input_tokens": 100,
             "cached_input_tokens": 60, "output_tokens": 20,
-            "reasoning_output_tokens": 5, "communication_events": []})
+            "reasoning_output_tokens": 5, "context_input_tokens": None,
+            "model_context_window": None, "communication_events": []})
+
+    def test_context_input_uses_latest_token_count_not_cumulative_total(self):
+        t = Telemetry("main")
+        t.consume(snapshot({"total_tokens": 1_406_890}, ordinal=4,
+                           last={"input_tokens": 127_593}, window=258_400))
+        t.consume(snapshot({"total_tokens": 4}, ordinal=3,
+                           last={"input_tokens": 4}, window=100))
+        summary = t.summary()
+        self.assertEqual(summary["context_input_tokens"], 127_593)
+        self.assertEqual(summary["model_context_window"], 258_400)
 
     def test_repeated_and_reordered_snapshots_never_add(self):
         records = [request(total=counts()), snapshot(), snapshot(),

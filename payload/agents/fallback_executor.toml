@@ -1,5 +1,5 @@
-name = "prewalk_executor"
-description = "Ejecuta un plan ya aprobado con alcance, archivos y validaciones acotados."
+name = "fallback_executor"
+description = "Ejecuta un plan aprobado sólo cuando el modelo del prewalk_executor no está disponible."
 model = "gpt-5.3-codex-spark"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
@@ -24,6 +24,5 @@ Realiza las validaciones solicitadas y devuelve un resumen conciso: cambios, com
 No delegues, no inicies Codex ni otros agentes anidados, y no uses procesos externos para eludir permisos. El agente principal conserva las decisiones, integración y comunicación final.
 """
 
-# This role is an executor only: it cannot recursively create subagents.
 [agents]
 enabled = false

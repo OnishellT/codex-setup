@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 {{CODEX_HOME_SHELL}}/integrations/prewalk/review_guard.py auto",
+        "timeout": 5,
+        "statusMessage": "[codex-setup:prewalk] Guarding reviewer context and history"
+      }, {
+        "type": "command",
+        "command": "python3 {{CODEX_HOME_SHELL}}/integrations/prewalk/writer_guard.py auto",
+        "timeout": 5,
+        "statusMessage": "[codex-setup:prewalk] Requiring isolated writer worktrees"
+      }]
+    }]
+  }
+}

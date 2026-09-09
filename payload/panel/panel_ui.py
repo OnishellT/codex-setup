@@ -19,7 +19,8 @@ LABELS = {
            "detail_keys": "↑↓ scroll · End follow · Enter close", "follow": "Following", "paused": "Paused",
            "events": "COMMUNICATION", "none": "No recorded messages", "model": "Model", "missing": "Agent not available",
            "done": "Done", "running": "Running", "error": "Error", "stopped": "Stopped", "unknown": "Unknown",
-           "result": "Result", "activity": "Activity", "in": "in", "out": "out", "cached": "cached"},
+           "result": "Result", "activity": "Activity", "in": "in", "out": "out", "cached": "cached",
+           "context_input": "Context input"},
     "es": {"title": "SUBAGENTES", "empty": "Sin subagentes todavía", "waiting": "Envía tu primer mensaje a Codex",
            "tokens": "Tokens", "share": "% de tokens", "quota": "Coste cuota", "unavailable": "no disponible",
            "time": "Duración", "select": "↑↓ elegir · Enter inspeccionar", "hide": "Ctrl-S ocultar / mostrar",
@@ -29,7 +30,8 @@ LABELS = {
            "detail_keys": "↑↓ desplazar · End seguir · Enter cerrar", "follow": "Siguiendo", "paused": "Pausado",
            "events": "COMUNICACIÓN", "none": "Sin mensajes registrados", "model": "Modelo", "missing": "Agente no disponible",
            "done": "Listo", "running": "Ejecutando", "error": "Error", "stopped": "Detenido", "unknown": "Desconocido",
-           "result": "Resultado", "activity": "Actividad", "in": "entrada", "out": "salida", "cached": "caché"},
+           "result": "Resultado", "activity": "Actividad", "in": "entrada", "out": "salida", "cached": "caché",
+           "context_input": "Entrada contexto"},
 }
 
 
@@ -107,6 +109,14 @@ def nickname(agent):
 
 def percent(value):
     return "—" if value is None else f"{value:.1f}%"
+
+
+def context_input(agent, words):
+    used = agent.get("context_input_tokens")
+    window = agent.get("model_context_window")
+    if type(used) is not int or used < 0 or type(window) is not int or window <= 0:
+        return words["context_input"] + " —"
+    return f"{words['context_input']} {number(used)} / {number(window)} ({100 * used / window:.1f}%)"
 
 
 def communication(snapshot, agent):
@@ -227,7 +237,7 @@ def draw_cards(paint, snapshot, selection, words, theme):
     root = snapshot.get("principal")
     if root:
         paint.text(3, 2, f"Main  {status(root, words)} · {duration(root['seconds'])}", "normal", True)
-        paint.text(4, 2, f"{words['tokens']} {number(snapshot.get('total_tokens'))} total · {number(root.get('tokens'))} Main", "muted")
+        paint.text(4, 2, context_input(root, words), "muted")
     else:
         paint.text(3, 2, words["waiting"], "muted")
     paint.text(5, 1, "─" * max(1, w - 3), "muted")

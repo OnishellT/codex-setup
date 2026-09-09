@@ -2,6 +2,7 @@
 """Create isolated Git worktrees, then integrate their commits conservatively."""
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -147,9 +148,20 @@ def create(args):
     if not 1 <= args.workers <= limit:
         raise RuntimeError("workers debe estar entre 1 y %d" % limit)
     base = git(repo, "rev-parse", "HEAD").stdout.strip()
-    parent = Path(args.session_parent).resolve() if args.session_parent else repo.parent
+    if args.session_parent:
+        parent = Path(args.session_parent).resolve()
+        private = False
+    else:
+        codex_home = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex")).resolve()
+        parent = codex_home / "worktrees" / "prewalk"
+        if parent.exists() and parent.is_symlink():
+            raise RuntimeError("la raíz privada de sesiones no puede ser un enlace simbólico")
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        private = True
     if not parent.is_dir() or parent == repo or repo in parent.parents:
         raise RuntimeError("--session-parent debe existir y quedar fuera del checkout")
+    if private and parent.stat().st_mode & 0o077:
+        raise RuntimeError("la raíz privada de sesiones debe ser accesible sólo por el usuario")
     session = Path(tempfile.mkdtemp(prefix="codex-prewalk-", dir=str(parent))).resolve()
     token = session.name
     workers = []
@@ -163,8 +175,9 @@ def create(args):
         integration = session / "integration"
         integration_branch = "codex-prewalk/%s/integration" % token
         git(repo, "worktree", "add", "-b", integration_branch, str(integration), base)
-    except Exception:
-        raise RuntimeError("creación incompleta preservada en %s: revisa y elimina manualmente" % session)
+    except Exception as error:
+        raise RuntimeError("%s; creación incompleta preservada en %s: revisa y elimina manualmente" %
+                           (error, session)) from error
     manifest = {
         "version": 1, "repo": str(repo), "base": base, "branch": branch,
         "session": str(session), "workers": workers,

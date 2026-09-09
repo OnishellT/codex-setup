@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -27,6 +29,10 @@ func testEngine(t *testing.T) *installer.Engine {
 		t.Fatal(err)
 	}
 	return e
+}
+
+func expandedCodexHomePath(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 func TestPayloadContainsNoMachineState(t *testing.T) {
@@ -105,7 +111,7 @@ func TestPackagedHooksInstallOnlyPonytailSkills(t *testing.T) {
 		if walkErr != nil {
 			return walkErr
 		}
-		if !entry.IsDir() && entry.Name() == "SKILL.md" && (!strings.HasPrefix(name, "payload/skills/") || !want[filepath.Base(filepath.Dir(name))]) {
+		if !entry.IsDir() && entry.Name() == "SKILL.md" && (!strings.HasPrefix(name, "payload/skills/") || (!want[filepath.Base(filepath.Dir(name))] && filepath.Base(filepath.Dir(name)) != "prewalk")) {
 			t.Errorf("unexpected skill packaged: %s", name)
 		}
 		return nil
@@ -114,7 +120,80 @@ func TestPackagedHooksInstallOnlyPonytailSkills(t *testing.T) {
 	}
 }
 
-func TestPackagedPrewalkIsPortableAndConfigDriven(t *testing.T) {
+func TestPackagedContextHandoff(t *testing.T) {
+	e := testEngine(t)
+	p, err := e.BuildPlan([]string{"context-handoff"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.Apply(p, nil); err != nil {
+		t.Fatal(err)
+	}
+	contextPath := filepath.Join(e.CodexHome, "integrations", "handoff", "context.py")
+	for _, name := range []string{
+		contextPath,
+		filepath.Join(e.CodexHome, "integrations", "handoff", "settings.json"),
+		filepath.Join(e.CodexHome, "skills", "handoff", "SKILL.md"),
+	} {
+		if _, err := os.Stat(name); err != nil {
+			t.Fatalf("context-handoff payload missing %s: %v", name, err)
+		}
+	}
+	configData, err := os.ReadFile(filepath.Join(e.CodexHome, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if err = toml.Unmarshal(configData, &config); err != nil || config["features"].(map[string]any)["hooks"] != true {
+		t.Fatalf("hooks feature not enabled: %v, %#v", err, config)
+	}
+	hooks, err := os.ReadFile(filepath.Join(e.CodexHome, "hooks.json"))
+	if err != nil || !strings.Contains(string(hooks), "[codex-setup:context-handoff]") || strings.Contains(string(hooks), "{{CODEX_HOME_SHELL}}") {
+		t.Fatalf("invalid context-handoff hooks: %v\n%s", err, hooks)
+	}
+	settingsPath := filepath.Join(e.CodexHome, "integrations", "handoff", "settings.json")
+	custom := []byte("{\"warning_percent\":60,\"critical_percent\":80,\"handoff_max_chars\":9000}\n")
+	if err = os.WriteFile(settingsPath, custom, 0600); err != nil {
+		t.Fatal(err)
+	}
+	again, err := e.BuildPlan([]string{"context-handoff"})
+	if err != nil || len(again.Changes) != 0 {
+		t.Fatalf("context-handoff not idempotent: %v, %v", again, err)
+	}
+	if got, _ := os.ReadFile(settingsPath); !bytes.Equal(got, custom) {
+		t.Fatal("custom handoff settings were overwritten")
+	}
+
+	project := filepath.Join(t.TempDir(), "plain project")
+	if err = os.Mkdir(project, 0755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("python3", "-B", contextPath, "new", "--cwd", project)
+	cmd.Env = append(os.Environ(), "CODEX_HOME="+e.CodexHome)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created map[string]string
+	if err = json.Unmarshal(out, &created); err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := os.ReadFile(created["path"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact = bytes.ReplaceAll(artifact, []byte("REPLACE:"), []byte("Recorded:"))
+	if err = os.WriteFile(created["path"], artifact, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd = exec.Command("python3", "-B", contextPath, "validate", created["path"])
+	cmd.Env = append(os.Environ(), "CODEX_HOME="+e.CodexHome)
+	if out, err = cmd.CombinedOutput(); err != nil {
+		t.Fatalf("installed handoff validation failed: %v\n%s", err, out)
+	}
+}
+
+func TestPackagedPrewalkDefaultsToNativeCodex(t *testing.T) {
 	e := testEngine(t)
 	p, err := e.BuildPlan([]string{"prewalk"})
 	if err != nil {
@@ -139,36 +218,450 @@ func TestPackagedPrewalkIsPortableAndConfigDriven(t *testing.T) {
 		return config
 	}
 	config := readConfig("config.toml")
-	if !strings.Contains(config["developer_instructions"].(string), "Apply it automatically") || config["model"] != nil {
-		t.Fatal("Prewalk must be automatic without replacing the primary model")
+	if config["sandbox_mode"] != "workspace-write" || config["approval_policy"] != "on-request" || config["approvals_reviewer"] != "auto_review" {
+		t.Fatalf("Prewalk must install native writer permissions: %#v", config)
 	}
-	for _, required := range []string{"terminal completed state", "wait wake-up is not proof of completion", "do not finish the parent turn"} {
-		if !strings.Contains(config["developer_instructions"].(string), required) {
+	sandboxWrite, ok := config["sandbox_workspace_write"].(map[string]any)
+	if !ok {
+		t.Fatalf("Prewalk writable roots table missing: %#v", config)
+	}
+	root := filepath.Join(e.CodexHome, "worktrees", "prewalk")
+	roots, ok := sandboxWrite["writable_roots"].([]any)
+	if !ok || len(roots) != 1 || roots[0] != root {
+		t.Fatalf("Prewalk writable root = %#v, want %s", sandboxWrite["writable_roots"], root)
+	}
+	if info, err := os.Stat(root); err != nil || info.Mode().Perm() != 0700 {
+		t.Fatalf("Prewalk worktree root missing/private: %v, %v", info, err)
+	}
+	dispatcher := config["developer_instructions"].(string)
+	if !strings.Contains(dispatcher, "automatically") || config["model"] != "gpt-6-astra" {
+		t.Fatal("Prewalk must be automatic with the native preset")
+	}
+	if strings.Contains(dispatcher, "{{CODEX_HOME_SHELL}}") || !strings.Contains(dispatcher, expandedCodexHomePath(e.CodexHome)+"/skills/prewalk/SKILL.md") {
+		t.Fatal("Prewalk dispatcher must point to the expanded installed skill path")
+	}
+	dispatcherSource, err := fs.ReadFile(assets, "payload/prewalk.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dispatcherSource) >= 2048 || len(dispatcher) >= 2048 {
+		t.Fatalf("Prewalk dispatcher is not compact: source=%d installed=%d", len(dispatcherSource), len(dispatcher))
+	}
+	for _, detailed := range []string{"terminal completed state", "wait wake-up is not proof of completion", "quality.py setup", "Qlty scan in the integration worktree", "least two explorers concurrently"} {
+		if strings.Contains(dispatcher, detailed) {
+			t.Fatalf("Prewalk dispatcher contains detailed policy: %s", detailed)
+		}
+	}
+	skillPath := filepath.Join(e.CodexHome, "skills", "prewalk", "SKILL.md")
+	skillFile, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("Prewalk skill was not installed: %v", err)
+	}
+	skill := string(skillFile)
+	expandedCodexHome := expandedCodexHomePath(e.CodexHome)
+	if strings.Contains(skill, "{{CODEX_HOME_SHELL}}") || !strings.Contains(skill, expandedCodexHome) {
+		t.Fatalf("Prewalk skill did not expand its portable CODEX_HOME path: %s", skill)
+	}
+	for _, required := range []string{"name: prewalk", "terminal completed state", "wait wake-up is not proof of completion", "do not finish the parent turn", "prepare --repo", "quality.py setup", "quality.py scan", "Qlty scan in the integration worktree", "writing project files or delegating writers", "never create a nested repository", "never invent an identity", "least two explorers concurrently"} {
+		if !strings.Contains(skill, required) {
 			t.Fatalf("installed Prewalk is missing the completion guard: %s", required)
 		}
 	}
+	skillsTable, ok := config["skills"].(map[string]any)
+	if !ok {
+		t.Fatalf("Prewalk skill registration missing: %#v", config["skills"])
+	}
+	registered := false
+	if entries, ok := skillsTable["config"].([]any); ok {
+		for _, raw := range entries {
+			entry, ok := raw.(map[string]any)
+			if ok && entry["path"] == skillPath && entry["enabled"] == true {
+				registered = true
+			}
+		}
+	}
+	if !registered {
+		t.Fatalf("Prewalk skill is not registered enabled: %#v", skillsTable["config"])
+	}
 	role := readConfig("agents/prewalk_executor.toml")
-	if role["name"] != "prewalk_executor" || role["model"] != "gpt-5.6-terra" || role["agents"].(map[string]any)["enabled"] != false {
+	if role["name"] != "prewalk_executor" || role["model"] != "gpt-5.3-codex-spark" || role["model_provider"] != nil || role["model_reasoning_effort"] != "medium" || role["agents"].(map[string]any)["enabled"] != false {
 		t.Fatalf("invalid executor: %#v", role)
 	}
-	for _, name := range []string{"hooks.json", "skills", "work.config.toml", "personal.config.toml"} {
+	if !strings.Contains(role["developer_instructions"].(string), "usa el ejecutable `apply_patch` mediante exec_command") {
+		t.Fatal("executor must include the command-line apply_patch fallback")
+	}
+	if config["model_provider"] != nil || config["model_catalog_json"] != nil || config["model_providers"] != nil {
+		t.Fatalf("native installation must not configure a custom provider or catalog: %#v", config)
+	}
+	if _, err := os.Stat(filepath.Join(e.CodexHome, "model-catalogs")); !os.IsNotExist(err) {
+		t.Fatalf("native installation unexpectedly installed a custom catalog: %v", err)
+	}
+	agents := config["agents"].(map[string]any)
+	if agents["max_concurrent_threads_per_session"] != int64(4) || agents["default_subagent_model"] != "gpt-5.3-codex-spark" || agents["default_subagent_reasoning_effort"] != "medium" {
+		t.Fatalf("invalid native agent limit: %#v", config["agents"])
+	}
+	for name, want := range map[string][2]string{
+		"explorer":          {"gpt-5.3-codex-spark", "medium"},
+		"fallback_explorer": {"gpt-5.3-codex-spark", "medium"},
+		"critical_explorer": {"gpt-5.3-codex-spark", "medium"},
+		"fallback_executor": {"gpt-5.3-codex-spark", "medium"},
+	} {
+		got := readConfig("agents/" + name + ".toml")
+		if got["model"] != want[0] || got["model_reasoning_effort"] != want[1] || got["agents"].(map[string]any)["enabled"] != false {
+			t.Fatalf("invalid native %s role: %#v", name, got)
+		}
+	}
+	fallbackExplorer := readConfig("agents/fallback_explorer.toml")
+	if fallbackExplorer["model_provider"] != nil {
+		t.Fatalf("native fallback explorer must not configure a model provider: %#v", fallbackExplorer)
+	}
+	reviewer := readConfig("agents/engineering_reviewer.toml")
+	if reviewer["name"] != "engineering_reviewer" || reviewer["model"] != "gpt-5.6-sol" || reviewer["model_reasoning_effort"] != "xhigh" || reviewer["sandbox_mode"] != "read-only" || reviewer["agents"].(map[string]any)["enabled"] != false {
+		t.Fatalf("invalid independent reviewer: %#v", reviewer)
+	}
+	if reviewer["approval_policy"] != nil || reviewer["mcp_servers"] != nil {
+		t.Fatal("reviewer must not change approvals or MCP configuration")
+	}
+	for _, requirement := range []string{"AGENTS.override.md", "reportes deterministas de Qlty", "complejidad ciclomática/cognitiva", "no escribas", "no delegues", "Propósito", "Corrección", "Reglas", "Rendimiento", "Diseño", "Seguridad", "Pruebas", "Integración", "`verified`", "`finding`", "`N/A`", "`not verified`", "P0-P3", "revisión incompleta"} {
+		if !strings.Contains(reviewer["developer_instructions"].(string), requirement) {
+			t.Fatalf("reviewer missing requirement: %s", requirement)
+		}
+	}
+	if !strings.Contains(skill, "engineering_reviewer") || strings.Contains(dispatcher, "engineering_reviewer") {
+		t.Fatal("Prewalk skill must invoke the independent reviewer without expanding the dispatcher")
+	}
+	features := config["features"].(map[string]any)
+	if features["hooks"] != true {
+		t.Fatalf("Prewalk hooks feature not enabled: %#v", features)
+	}
+	hooks, err := os.ReadFile(filepath.Join(e.CodexHome, "hooks.json"))
+	if err != nil || !strings.Contains(string(hooks), "[codex-setup:prewalk] Guarding reviewer context") || strings.Contains(string(hooks), "{{CODEX_HOME_SHELL}}") {
+		t.Fatalf("invalid installed Prewalk hooks: %v\n%s", err, hooks)
+	}
+	reviewerFile, err := os.ReadFile(filepath.Join(e.CodexHome, "agents", "engineering_reviewer.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(reviewer["developer_instructions"].(string), "{{CODEX_HOME_SHELL}}") || strings.Contains(string(reviewerFile), "[codex-setup:prewalk-review]") {
+		t.Fatal("reviewer role must not retain a managed role-scoped guard")
+	}
+	for _, name := range []string{"work.config.toml", "personal.config.toml"} {
 		if _, err := os.Stat(filepath.Join(e.CodexHome, name)); !os.IsNotExist(err) {
 			t.Errorf("Prewalk unexpectedly installed %s", name)
 		}
 	}
-	// The executor is user-owned after installation, including future providers.
-	role["model"] = "custom-executor"
-	role["model_provider"] = "custom-provider"
-	custom, err := toml.Marshal(role)
+	for _, name := range []string{"hooks.json", "review_guard.py", "worktrees.py", "quality.py"} {
+		if _, err := os.Stat(filepath.Join(e.CodexHome, "integrations", "prewalk", name)); err != nil {
+			t.Errorf("Prewalk integration missing %s: %v", name, err)
+		}
+	}
+	settingsData, err := os.ReadFile(filepath.Join(e.CodexHome, "integrations", "prewalk", "settings.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(e.CodexHome, "agents/prewalk_executor.toml"), custom, 0600); err != nil {
+	var prewalkSettings map[string]any
+	if err = json.Unmarshal(settingsData, &prewalkSettings); err != nil || prewalkSettings["max_workers"] != float64(4) {
+		t.Fatalf("invalid Prewalk worker limit: %v, %#v", err, prewalkSettings)
+	}
+	qltyPath := filepath.Join(e.CodexHome, "integrations", "prewalk", "bin", "qlty")
+	qltyInfo, err := os.Stat(qltyPath)
+	if err != nil || qltyInfo.Mode().Perm() != 0755 {
+		t.Fatalf("managed Qlty missing or not executable: %v, %v", qltyInfo, err)
+	}
+	if out, err := exec.Command(qltyPath, "--version").CombinedOutput(); err != nil || !strings.Contains(string(out), "0.644.0") {
+		t.Fatalf("managed Qlty version mismatch: %v\n%s", err, out)
+	}
+	// Exercise the installed (embedded) helper, not just the source tree.
+	project := filepath.Join(t.TempDir(), "new project")
+	if err := os.Mkdir(project, 0755); err != nil {
 		t.Fatal(err)
+	}
+	helper := filepath.Join(e.CodexHome, "integrations", "prewalk", "worktrees.py")
+	cmd := exec.Command("python3", "-B", helper, "prepare", "--repo", project)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_COUNT=2", "GIT_CONFIG_KEY_0=user.name", "GIT_CONFIG_VALUE_0=Prewalk test", "GIT_CONFIG_KEY_1=user.email", "GIT_CONFIG_VALUE_1=test@example.invalid")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("installed Git preparation failed: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", project, "ls-tree", "-r", "--name-only", "HEAD").CombinedOutput(); err != nil || strings.TrimSpace(string(out)) != ".gitignore" {
+		t.Fatalf("initial commit must contain only .gitignore: %v\n%s", err, out)
 	}
 	p, err = e.BuildPlan([]string{"prewalk"})
 	if err != nil || len(p.Changes) != 0 {
-		t.Fatalf("not idempotent: %v, %v", p, err)
+		t.Fatalf("not idempotent: %v", err)
+	}
+}
+
+func TestPackagedFallbackExecutorMigratesGeneratedInstructions(t *testing.T) {
+	e := testEngine(t)
+	data, err := fs.ReadFile(assets, "payload/agents/fallback_executor.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var role map[string]any
+	if err = toml.Unmarshal(data, &role); err != nil {
+		t.Fatal(err)
+	}
+	wanted := role["developer_instructions"].(string)
+	var old []string
+	for _, paragraph := range strings.Split(wanted, "\n\n") {
+		if !strings.HasPrefix(paragraph, "Como writer de Prewalk,") && !strings.HasPrefix(paragraph, "Haz el commit de los cambios aprobados") {
+			old = append(old, paragraph)
+		}
+	}
+	role["developer_instructions"] = strings.Join(old, "\n\n")
+	role["model"] = "preserved-fallback-model"
+	data, err = toml.Marshal(role)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filename := filepath.Join(e.CodexHome, "agents", "fallback_executor.toml")
+	if err = os.MkdirAll(filepath.Dir(filename), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filename, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.BuildPlan([]string{"prewalk"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.Apply(p, nil); err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = toml.Unmarshal(data, &role); err != nil {
+		t.Fatal(err)
+	}
+	if role["developer_instructions"] != wanted || role["model"] != "gpt-5.3-codex-spark" {
+		t.Fatal("fallback migration did not apply the native preset and current instructions")
+	}
+}
+
+func TestPackagedPrewalkPreservesWritableRootsAndPermissionChoices(t *testing.T) {
+	e := testEngine(t)
+	if err := os.MkdirAll(e.CodexHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(e.CodexHome, "config.toml")
+	config := "sandbox_mode = 'danger-full-access'\napproval_policy = 'never'\napprovals_reviewer = 'user'\n[sandbox_workspace_write]\nwritable_roots = ['/existing/root']\n"
+	if err := os.WriteFile(configPath, []byte(config), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(configPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.BuildPlan([]string{"prewalk"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.Apply(p, nil); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err = toml.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["sandbox_mode"] != "danger-full-access" || got["approval_policy"] != "never" || got["approvals_reviewer"] != "user" {
+		t.Fatalf("custom permission choices changed: %#v", got)
+	}
+	sandbox := got["sandbox_workspace_write"].(map[string]any)
+	root := filepath.Join(e.CodexHome, "worktrees", "prewalk")
+	if !reflect.DeepEqual(sandbox["writable_roots"], []any{"/existing/root", root}) {
+		t.Fatalf("writable roots = %#v", sandbox["writable_roots"])
+	}
+	if info, err := os.Stat(root); err != nil || info.Mode().Perm() != 0700 {
+		t.Fatalf("private worktree root = %v, %v", info, err)
+	}
+	if info, err := os.Stat(configPath); err != nil || info.Mode().Perm() != 0755 {
+		t.Fatalf("config mode changed unexpectedly: %v, %v", info, err)
+	}
+}
+
+func TestPackagedCustomNativeRoleChoice(t *testing.T) {
+	e := testEngine(t)
+	p, err := e.BuildPlanWithModels([]string{"base", "prewalk"}, map[string]installer.ModelChoice{
+		"prewalk_executor": {Model: "gpt-5.6-sol", Effort: "high"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.Apply(p, nil); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(e.CodexHome, "agents/prewalk_executor.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var role map[string]any
+	if err = toml.Unmarshal(b, &role); err != nil {
+		t.Fatal(err)
+	}
+	if role["model"] != "gpt-5.6-sol" || role["model_reasoning_effort"] != "high" || role["model_reasoning_summary"] != nil {
+		t.Fatalf("custom choice lost: %#v", role)
+	}
+}
+
+func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
+	// The packaged-install test isolates dependency checks; checkZG tests and
+	// the installed Node helper tests below exercise the actual validation.
+	realNode, err := exec.LookPath("node")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := t.TempDir()
+	pkg := filepath.Join(deps, "modules", "@zvec", "zvec-grep")
+	if err := os.MkdirAll(filepath.Join(pkg, "dist", "cli"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
+	for name, content := range map[string]string{
+		filepath.Join(pkg, "package.json"):            `{"name":"@zvec/zvec-grep","version":"0.2.1","bin":{"zg":"dist/cli/index.js"}}`,
+		filepath.Join(pkg, "dist", "cli", "index.js"): "#!/bin/sh\nexit 1\n",
+		filepath.Join(deps, "node"):                   "#!/bin/sh\ncase \"$1\" in\n--version) echo v24.0.0;;\n--input-type=module) echo patched;;\n*) exec " + quote(realNode) + " \"$@\";;\nesac\n",
+		filepath.Join(deps, "npm"):                    "#!/bin/sh\nprintf '%s\\n' " + quote(filepath.Join(deps, "modules")) + "\n",
+	} {
+		if err := os.WriteFile(name, []byte(content), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(filepath.Join(pkg, "dist", "cli", "index.js"), filepath.Join(deps, "zg")); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", deps+string(os.PathListSeparator)+os.Getenv("PATH"))
+	e := testEngine(t)
+	var zg installer.Module
+	for _, module := range e.Modules {
+		if module.ID == "zg" {
+			zg = module
+			break
+		}
+	}
+	if zg.ID == "" || zg.Default {
+		t.Fatalf("zg must be an available opt-in module: %#v", zg)
+	}
+
+	if err := os.MkdirAll(e.CodexHome, 0755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(e.CodexHome, "config.toml")
+	if err := os.WriteFile(configPath, []byte("model = \"keep\"\napproval_policy = \"on-request\"\nsandbox_mode = \"workspace-write\"\n[mcp_servers.other]\ncommand = \"other\"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	agentsPath := filepath.Join(e.CodexHome, "AGENTS.md")
+	if err := os.WriteFile(agentsPath, []byte("User instructions stay here.\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err := e.BuildPlan([]string{"prewalk", "zg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Apply(p, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if err := toml.Unmarshal(b, &config); err != nil {
+		t.Fatal(err)
+	}
+	if config["model"] != "gpt-6-astra" || !strings.Contains(config["developer_instructions"].(string), "automatically") {
+		t.Fatalf("zg changed existing or Prewalk configuration: %#v", config)
+	}
+	mcp := config["mcp_servers"].(map[string]any)
+	if mcp["other"].(map[string]any)["command"] != "other" {
+		t.Fatalf("zg replaced an existing MCP server: %#v", mcp)
+	}
+	server := mcp["zvec_grep"].(map[string]any)
+	if server["command"] != "zg" || server["enabled"] != true || server["required"] != false || server["default_tools_approval_mode"] != "auto" || server["startup_timeout_sec"] != int64(30) || server["tool_timeout_sec"] != int64(120) {
+		t.Fatalf("unexpected zg server configuration: %#v", server)
+	}
+	args := server["args"].([]any)
+	tools := server["enabled_tools"].([]any)
+	if strings.Join([]string{args[0].(string), args[1].(string), args[2].(string), args[3].(string)}, " ") != "server --stdio --mcp-toolset agent" || len(tools) != 1 || tools[0] != "zvec_grep_search" {
+		t.Fatalf("zg exposes unexpected command or tools: %#v", server)
+	}
+	if _, found := server["env"]; found {
+		t.Fatalf("zg config must not package environment or credentials: %#v", server)
+	}
+	if config["approval_policy"] != "on-request" || config["sandbox_mode"] != "workspace-write" || server["tools"] != nil {
+		t.Fatalf("zg changed approvals or added per-tool authorization: %#v", config)
+	}
+
+	agents, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(agents), "User instructions stay here.") || !strings.Contains(string(agents), "<!-- codex-setup:zg -->") {
+		t.Fatalf("zg did not preserve or manage AGENTS.md: %s", agents)
+	}
+	for _, guidance := range []string{"freshness: \"wait_for_fresh\"", "possibly_stale", "timeout", "error", "live file", "continue with `rg`"} {
+		if !strings.Contains(string(agents), guidance) {
+			t.Fatalf("zg is missing freshness fallback guidance: %s", guidance)
+		}
+	}
+	readme, err := os.ReadFile(filepath.Join(e.CodexHome, "integrations", "zg", "README.md"))
+	if err != nil || !strings.Contains(string(readme), "@zvec/zvec-grep@0.2.1") {
+		t.Fatalf("zg integration documentation was not copied: %v\n%s", err, readme)
+	}
+	if _, err := os.Stat(filepath.Join(e.Home, ".local", "bin", "zg")); !os.IsNotExist(err) {
+		t.Fatalf("zg module must not install a binary: %v", err)
+	}
+	helper := filepath.Join(e.CodexHome, "integrations", "zg", "pr86-watch-manager.mjs")
+	if _, err := os.Stat(helper); err != nil {
+		t.Fatalf("zg patch helper was not installed: %v", err)
+	}
+	cmd := exec.Command("node", "--test", filepath.Join(e.CodexHome, "integrations", "zg", "test-pr86.mjs"))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("installed zg patch helper tests: %v\n%s", err, out)
+	}
+
+	// Reapplying the selected module enables an older disabled installation,
+	// without replacing Prewalk or unrelated configuration.
+	server["enabled"] = false
+	disabled, err := toml.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, disabled, 0600); err != nil {
+		t.Fatal(err)
+	}
+	p, err = e.BuildPlan([]string{"zg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Apply(p, nil); err != nil {
+		t.Fatal(err)
+	}
+	b, err = os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config = map[string]any{}
+	if err := toml.Unmarshal(b, &config); err != nil {
+		t.Fatal(err)
+	}
+	server = config["mcp_servers"].(map[string]any)["zvec_grep"].(map[string]any)
+	if server["enabled"] != true || config["model"] != "gpt-6-astra" || !strings.Contains(config["developer_instructions"].(string), "automatically") {
+		t.Fatalf("zg reapply did not enable only its managed configuration: %#v", config)
+	}
+	if config["approval_policy"] != "on-request" || config["sandbox_mode"] != "workspace-write" || server["default_tools_approval_mode"] != "auto" || server["tools"] != nil {
+		t.Fatalf("zg reapply changed approvals: %#v", config)
+	}
+
+	p, err = e.BuildPlan([]string{"prewalk", "zg"})
+	if err != nil || len(p.Changes) != 0 {
+		t.Fatalf("zg install is not idempotent: %v, %v", p, err)
 	}
 }
 

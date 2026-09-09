@@ -40,9 +40,12 @@ def repository(value):
 
 
 def qlty():
+    bundled = Path(__file__).resolve().parent / "bin" / "qlty"
+    if bundled.is_file() and os.access(bundled, os.X_OK):
+        return str(bundled)
     executable = shutil.which("qlty")
     if not executable:
-        raise RuntimeError("qlty no está disponible en PATH")
+        raise RuntimeError("qlty no está instalado por codex-setup ni disponible en PATH")
     return executable
 
 

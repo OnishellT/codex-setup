@@ -261,7 +261,7 @@ class Tail:
     def summary(self):
         spawn = self.meta.get("source", {})
         spawn = spawn.get("subagent", {}).get("thread_spawn", {}) if isinstance(spawn, dict) else {}
-        label = spawn.get("agent_path", "principal").rsplit("/", 1)[-1]
+        label = (spawn.get("agent_path") or spawn.get("agent_role") or "principal").rsplit("/", 1)[-1]
         elapsed = self.elapsed_completed
         if self.started and self.ended is None:
             elapsed += max(0, time.time() - self.started)
@@ -420,6 +420,57 @@ def tmux_binary():
     raise RuntimeError("Se necesita tmux real (el shim herdr no basta). Usa CODEX_PANEL_TMUX=/ruta/tmux")
 
 
+def _write_exit_status(runtime, status):
+    """Publish the child status atomically before the isolated server is removed."""
+    temporary = runtime / "exit.json.tmp"
+    temporary.write_text(json.dumps({"status": status}))
+    temporary.replace(runtime / "exit.json")
+
+
+def _run(runtime):
+    """Run Codex, then tear down this launch's private tmux server."""
+    runtime = Path(runtime)
+    command = json.loads((runtime / "launch.json").read_text())
+    (runtime / "launch.json").unlink()
+    (runtime / "pid").write_text(str(os.getpid()))
+    supervisor = json.loads((runtime / "supervisor.json").read_text())
+
+    def ignore_sigint(signum, frame):
+        pass
+    previous_sigint = signal.signal(signal.SIGINT, ignore_sigint)
+    status = 127
+    try:
+        try:
+            child = subprocess.Popen(command)
+            while True:
+                try:
+                    returncode = child.wait()
+                    break
+                except KeyboardInterrupt:
+                    # Keep waiting if a test or an older signal path raises;
+                    # the installed handler makes real Ctrl-C a no-op here.
+                    continue
+        except OSError:
+            returncode = 127
+        status = returncode if returncode >= 0 else 128 - returncode
+        _write_exit_status(runtime, status)
+    finally:
+        # Publish first, then tear down only this launch's private server.
+        subprocess.run([supervisor["tmux"], "-L", supervisor["session"],
+                        "kill-session", "-t", supervisor["session"]],
+                       capture_output=True)
+        signal.signal(signal.SIGINT, previous_sigint)
+    return status
+
+
+def _read_exit_status(runtime):
+    try:
+        status = json.loads((Path(runtime) / "exit.json").read_text())["status"]
+        return status if isinstance(status, int) and not isinstance(status, bool) else None
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
+
+
 def launch(args):
     parser = argparse.ArgumentParser(description="Codex CLI + panel lateral local de subagentes")
     parser.add_argument("--profile", "-p", default="personal")
@@ -451,6 +502,7 @@ def launch(args):
     (runtime / "launch.json").write_text(json.dumps(command))
     session = "codex-" + runtime.name.removeprefix("codex-panel-")
     prefix = [tmux, "-L", session]
+    (runtime / "supervisor.json").write_text(json.dumps({"tmux": tmux, "session": session}))
     # One server per launch preserves its exact account/config/PATH environment.
     def tm(*parts):
         return subprocess.check_output([*prefix, *parts], text=True, stderr=subprocess.PIPE).strip()
@@ -463,10 +515,12 @@ def launch(args):
                   "-x", str(max(100, size.columns)), "-y", str(max(24, size.lines)), "-c", cwd, runner)
         # Window/session scoped options. No global bindings or shell aliases.
         tm("set-option", "-t", session, "mouse", "on")
+        tm("set-option", "-t", session, "status", "off")
         tm("set-option", "-t", session, "status-right", "Ctrl-S sidebar | Ctrl-b arrows: focus | Ctrl-b d: detach")
         tm("set-option", "-t", session, "status-right-length", "85")
         right_width = min(options.width, max(28, size.columns // 3))
         tm("set-option", "-s", "terminal-features", "*:RGB")
+        tm("set-option", "-s", "extended-keys", "on")
         # This server was just created exclusively for this launch; never alter
         # escape-time on an existing/shared tmux server.
         tm("set-option", "-s", "escape-time", "10")
@@ -484,25 +538,28 @@ def launch(args):
         # TMUX from another server must not prevent attaching our isolated server.
         env = dict(os.environ)
         env.pop("TMUX", None)
-        subprocess.run([*prefix, "attach-session", "-t", session], env=env, check=True)
+        attached = subprocess.run([*prefix, "attach-session", "-t", session], env=env)
+        status = _read_exit_status(runtime)
+        if status is not None:
+            return status
+        if attached.returncode:
+            raise subprocess.CalledProcessError(attached.returncode, attached.args)
         print("Para volver: " + shlex.join([*prefix, "attach-session", "-t", session]))
+    return 0
 
 
 def main():
     try:
         if len(sys.argv) > 1 and sys.argv[1] == "_run":
-            runtime = Path(sys.argv[2])
-            command = json.loads((runtime / "launch.json").read_text())
-            (runtime / "launch.json").unlink()
-            (runtime / "pid").write_text(str(os.getpid()))
-            os.execv(command[0], command)
+            return _run(Path(sys.argv[2]))
         elif len(sys.argv) > 1 and sys.argv[1] == "watch":
             watch(sys.argv[2:])
         elif len(sys.argv) > 1 and sys.argv[1] == "toggle":
             from panel_control import toggle
             toggle(Path(sys.argv[2]))
         else:
-            launch(sys.argv[1:])
+            result = launch(sys.argv[1:])
+            return 0 if result is None else result
     except KeyboardInterrupt:
         return 130
     except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:

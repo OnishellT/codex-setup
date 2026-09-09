@@ -61,7 +61,7 @@ func fixture() (*model, *fakeBackend) {
 		Changes:  []installer.Change{{Path: "/destino/.codex/config.toml", Kind: "actualizar"}},
 		Warnings: []string{"Se eliminarán comentarios TOML."},
 	}}
-	return newModel(f, modules, "/destino", "/destino/.codex"), f
+	return newModel(f, modules, "/destino/.codex"), f
 }
 
 func press(m *model, code rune) tea.Cmd {
@@ -99,6 +99,13 @@ func TestNavigationAndDependencies(t *testing.T) {
 	if !strings.Contains(ansi.Strip(m.View().Content), "dependencia") {
 		t.Fatal("implicit dependency is not labelled")
 	}
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "Opciones compartidas") || strings.Contains(view, "Herramientas para desarrollo") {
+		t.Fatal("selection must show details only for the focused module")
+	}
+	if !strings.Contains(view, "a todos") || !strings.Contains(view, "n ninguno") {
+		t.Fatal("bulk selection shortcuts must remain discoverable")
+	}
 	press(m, tea.KeySpace)
 	if !m.resolved["base"] || m.selected["base"] || m.notice == "" {
 		t.Fatal("a required dependency must remain checked with an explanation")
@@ -108,6 +115,10 @@ func TestNavigationAndDependencies(t *testing.T) {
 		t.Fatal("cursor crossed the start")
 	}
 	press(m, tea.KeyDown)
+	view = ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "Herramientas para desarrollo") || !strings.Contains(view, "Requiere: base") || strings.Contains(view, "Opciones compartidas") {
+		t.Fatal("focused module details did not follow the cursor")
+	}
 	press(m, tea.KeySpace)
 	if m.selected["tools"] || m.resolved["base"] {
 		t.Fatal("removing a dependent must remove its unused implicit dependency")
@@ -148,7 +159,7 @@ func TestFirstEnterOnlyPreviewsSecondConfirms(t *testing.T) {
 		t.Fatal("preview did not build exactly the explicit selection")
 	}
 	view := ansi.Strip(m.View().Content)
-	for _, want := range []string{"solo lectura", "Configuración base", "/destino/.codex/config.toml", "Advertencia:", "CONFIRMACIÓN", "Home destino: /destino", "Codex home: /destino/.codex"} {
+	for _, want := range []string{"sin cambios aún", "Configuración base", "/destino/.codex/config.toml", "⚠", "Destino: /destino/.codex"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("preview missing %q:\n%s", want, view)
 		}
@@ -210,7 +221,7 @@ func TestPlanErrorsAndStalePlans(t *testing.T) {
 				t.Fatal("expected a visible planning error")
 			}
 			view := ansi.Strip(m.View().Content)
-			if !strings.Contains(view, "No se puede instalar") || !strings.Contains(view, "Pulsa r") {
+			if !strings.Contains(view, "No se puede instalar") || !strings.Contains(view, "r editar") {
 				t.Fatalf("error needs actionable guidance: %s", view)
 			}
 			if tc.err != nil && !strings.Contains(view, tc.err.Error()) {
@@ -346,7 +357,7 @@ func TestNarrowRenderAndScrolling(t *testing.T) {
 			t.Run(fmt.Sprintf("%dx%d/stage%d", size[0], size[1], stage), func(t *testing.T) {
 				m, f := fixture()
 				m.stage, m.plan = stage, f.plan
-				m.home = "/un/destino/muy/largo/日本語/con/ácentos"
+				m.codexHome = "/un/destino/muy/largo/日本語/con/ácentos"
 				for i := 0; i < 40; i++ {
 					m.logs = append(m.logs, "Progreso de instalación número "+fmt.Sprint(i))
 				}
@@ -370,7 +381,7 @@ func TestNarrowRenderAndScrolling(t *testing.T) {
 		}
 	}
 	m, _ := fixture()
-	m.Update(tea.WindowSizeMsg{Width: 25, Height: 7})
+	m.Update(tea.WindowSizeMsg{Width: 25, Height: 4})
 	press(m, tea.KeyEnd)
 	if m.offset == 0 || !strings.Contains(ansi.Strip(m.View().Content), "Extras") {
 		t.Fatal("cursor did not scroll into view")

@@ -1,0 +1,9 @@
+[mcp_servers.zvec_grep]
+command = "zg"
+args = ["server", "--stdio", "--mcp-toolset", "agent"]
+enabled = true
+required = false
+enabled_tools = ["zvec_grep_search"]
+default_tools_approval_mode = "auto"
+startup_timeout_sec = 30
+tool_timeout_sec = 120

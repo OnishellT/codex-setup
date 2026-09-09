@@ -110,6 +110,14 @@ class WorktreeTests(unittest.TestCase):
         self.assertNotEqual(self.helper("create", "--repo", str(self.repo), "--workers", "2",
                                         "--session-parent", str(self.repo), check=False).returncode, 0)
 
+    def test_default_session_parent_is_private_codex_home(self):
+        codex_home = Path(self.temp.name) / "codex-home"
+        result = self.helper("create", "--repo", str(self.repo), "--workers", "1",
+                             env={"CODEX_HOME": str(codex_home)})
+        session = Path(json.loads(result.stdout)["session"])
+        self.assertEqual(session.parent, codex_home / "worktrees" / "prewalk")
+        self.assertEqual(session.parent.stat().st_mode & 0o777, 0o700)
+
     def test_overlap_is_rejected_before_any_integration(self):
         data = self.create()
         for worker, text in zip(data["workers"], ("one\n", "two\n")):

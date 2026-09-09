@@ -1,0 +1,5 @@
+{
+  "worktrees": true,
+  "max_workers": 4,
+  "quality": true
+}

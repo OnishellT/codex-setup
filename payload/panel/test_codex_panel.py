@@ -80,6 +80,15 @@ class PanelTests(unittest.TestCase):
         self.assertEqual(tail.meta["id"], "child")
         self.assertEqual(tail.model, "gpt-5.6-terra")
 
+    def test_missing_agent_path_does_not_crash_summary(self):
+        path = self.log()
+        child_meta = meta("child", "root")
+        child_meta["source"]["subagent"]["thread_spawn"]["agent_path"] = None
+        child_meta["source"]["subagent"]["thread_spawn"]["agent_role"] = "explorer"
+        path.write_text(record("session_meta", child_meta))
+
+        self.assertEqual(panel.Tail(path).summary()["task"], "explorer")
+
     def test_ignore_reasoning_and_parent_items(self):
         tail = panel.Tail(self.log())
         for item in [{"type": "Reasoning", "raw_content": "PRIVATE"},

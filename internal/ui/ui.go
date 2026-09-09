@@ -31,6 +31,7 @@ const (
 	preview
 	installing
 	finished
+	modelSetup
 )
 
 type planMsg struct {
@@ -46,26 +47,29 @@ type resultMsg struct {
 }
 
 type model struct {
-	engine          backend
-	modules         []installer.Module
-	home, codexHome string
-	selected        map[string]bool // Explicit choices; Resolve supplies dependencies.
-	resolved        map[string]bool
-	resolveErr      error
-	stage           stage
-	cursor, offset  int
-	width, height   int
-	dark            bool
-	notice          string
-	plan            *installer.Plan
-	planErr         error
-	building        bool
-	generation      int
-	events          chan tea.Msg
-	logs            []string
-	follow          bool
-	result          installer.Result
-	installErr      error
+	engine         backend
+	modules        []installer.Module
+	codexHome      string
+	selected       map[string]bool // Explicit choices; Resolve supplies dependencies.
+	resolved       map[string]bool
+	resolveErr     error
+	stage          stage
+	cursor, offset int
+	width, height  int
+	dark           bool
+	notice         string
+	plan           *installer.Plan
+	planErr        error
+	building       bool
+	generation     int
+	events         chan tea.Msg
+	logs           []string
+	follow         bool
+	result         installer.Result
+	installErr     error
+	choices        map[string]installer.ModelChoice
+	modelOptions   []installer.ModelOption
+	roleCursor     int
 }
 
 // Run starts an interactive installation. Cancelling before confirmation is a
@@ -74,7 +78,7 @@ func Run(engine *installer.Engine) error {
 	if engine == nil {
 		return errors.New("no se recibió un motor de instalación")
 	}
-	m := newModel(engine, engine.Modules, engine.Home, engine.CodexHome)
+	m := newModel(engine, engine.Modules, engine.CodexHome)
 	p := tea.NewProgram(m, tea.WithFilter(transactionFilter), tea.WithoutSignalHandler())
 	// Bubble Tea's default signal listener stops after the first signal, even
 	// when a filter rejects it. Keep listening until Run ends so a second
@@ -117,11 +121,13 @@ func transactionFilter(current tea.Model, msg tea.Msg) tea.Msg {
 	return msg
 }
 
-func newModel(engine backend, modules []installer.Module, home, codexHome string) *model {
+func newModel(engine backend, modules []installer.Module, codexHome string) *model {
 	m := &model{
-		engine: engine, modules: modules, home: home, codexHome: codexHome,
+		engine: engine, modules: modules, codexHome: codexHome,
 		selected: make(map[string]bool), width: 80, height: 24, dark: true,
 	}
+	m.choices = installer.DefaultModelChoices()
+	m.modelOptions = installer.NativeModelOptions()
 	for _, module := range modules {
 		if module.Default {
 			m.selected[module.ID] = true
@@ -188,6 +194,67 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) key(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	k := key.String()
+	if m.stage == modelSetup {
+		switch k {
+		case "esc", "enter":
+			m.stage, m.offset = selection, 0
+			return m, nil
+		case "up", "k":
+			m.roleCursor = max(0, m.roleCursor-1)
+		case "down", "j":
+			m.roleCursor = min(len(installer.ModelRoles)-1, m.roleCursor+1)
+		case "d":
+			m.choices = installer.DefaultModelChoices()
+		case "left", "right", "tab", "shift+tab":
+			role := installer.ModelRoles[m.roleCursor].ID
+			if role == "principal" {
+				m.notice = "Principal fijo: Astra/medium. Selecciona un subagente con ↓."
+				return m, nil
+			}
+			m.notice = ""
+			choice := m.choices[role]
+			index := 0
+			for i, option := range m.modelOptions {
+				if option.Model == choice.Model {
+					index = i
+					break
+				}
+			}
+			if k == "left" || k == "right" {
+				delta := 1
+				if k == "left" {
+					delta = -1
+				}
+				index = (index + delta + len(m.modelOptions)) % len(m.modelOptions)
+				choice.Model = m.modelOptions[index].Model
+				choice.Effort = m.modelOptions[index].Efforts[0]
+				for _, effort := range m.modelOptions[index].Efforts {
+					if effort == "medium" {
+						choice.Effort = effort
+					}
+				}
+			} else {
+				efforts := m.modelOptions[index].Efforts
+				ei := 0
+				for i, e := range efforts {
+					if e == choice.Effort {
+						ei = i
+						break
+					}
+				}
+				delta := 1
+				if k == "shift+tab" {
+					delta = -1
+				}
+				choice.Effort = efforts[(ei+delta+len(efforts))%len(efforts)]
+			}
+			m.choices[role] = choice
+		}
+		if k != "q" && k != "ctrl+c" {
+			m.ensureCursor()
+			return m, nil
+		}
+	}
 	if k == "q" || k == "esc" || k == "ctrl+c" {
 		if m.stage == installing {
 			m.notice = "Transacción en curso: espera al resultado para salir."
@@ -200,6 +267,9 @@ func (m *model) key(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.stage == selection {
 		switch k {
+		case "m":
+			m.stage, m.offset, m.roleCursor = modelSetup, 0, 0
+			return m, nil
 		case "up", "k":
 			m.cursor = max(0, m.cursor-1)
 			m.ensureCursor()
@@ -236,11 +306,23 @@ func (m *model) key(key tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.plan, m.planErr, m.notice = nil, nil, ""
 			m.generation++
 			ids, generation, engine := m.ids(), m.generation, m.engine
+			choices := make(map[string]installer.ModelChoice, len(m.choices))
+			for role, choice := range m.choices {
+				choices[role] = choice
+			}
 			return m, func() tea.Msg {
 				if len(ids) == 0 {
 					return planMsg{generation: generation, err: errors.New("no hay módulos seleccionados; pulsa r y marca al menos uno con Espacio")}
 				}
-				plan, err := engine.BuildPlan(ids)
+				var plan *installer.Plan
+				var err error
+				if native, ok := engine.(interface {
+					BuildPlanWithModels([]string, map[string]installer.ModelChoice) (*installer.Plan, error)
+				}); ok {
+					plan, err = native.BuildPlanWithModels(ids, choices)
+				} else {
+					plan, err = engine.BuildPlan(ids)
+				}
 				return planMsg{generation: generation, plan: plan, err: err}
 			}
 		}
@@ -315,7 +397,7 @@ func waitEvent(events <-chan tea.Msg) tea.Cmd {
 func (m *model) bodyHeight() int { return max(1, m.height-2) }
 
 func (m *model) ensureCursor() {
-	if m.stage != selection {
+	if m.stage != selection && m.stage != modelSetup {
 		return
 	}
 	_, start, end := m.document()
@@ -358,15 +440,28 @@ func (m *model) document() (lines []string, focusStart, focusEnd int) {
 		}
 	}
 	plain := lipgloss.NewStyle()
-	add("Home destino: "+m.home, muted)
-	add("Codex home: "+m.codexHome, muted)
-	add("", plain)
 	switch m.stage {
+	case modelSetup:
+		add("Modelos · suscripción ChatGPT", accent)
+		add("Preset: Astra/medium · Sol/xhigh · Spark/medium", muted)
+		add("", plain)
+		for i, role := range installer.ModelRoles {
+			start := len(lines)
+			style := plain
+			marker := "  "
+			if i == m.roleCursor {
+				style = accent
+				marker = "› "
+			}
+			choice := m.choices[role.ID]
+			add(marker+role.Label+": "+choice.Model+" / "+choice.Effort, style)
+			if i == m.roleCursor {
+				focusStart, focusEnd = start, len(lines)-1
+			}
+		}
 	case selection:
-		add("Elige módulos · las dependencias se añaden automáticamente", muted)
-		add("Espacio: marcar · a: todos · n: ninguno · Enter: revisar", muted)
 		if len(m.modules) == 0 {
-			add("No hay módulos disponibles. Pulsa q para salir.", warning)
+			add("No hay módulos disponibles.", warning)
 		}
 		for i, module := range m.modules {
 			start := len(lines)
@@ -385,68 +480,70 @@ func (m *model) document() (lines []string, focusStart, focusEnd int) {
 			if i == m.cursor {
 				focusStart, focusEnd = start, len(lines)-1
 			}
-			add("    "+module.Description, muted)
+		}
+		if len(m.modules) > 0 {
+			module := m.modules[m.cursor]
+			add("", plain)
+			add(module.Description, muted)
 			if len(module.Depends) > 0 {
-				add("    Requiere: "+strings.Join(module.Depends, ", "), muted)
-			}
-			if len(module.Platforms) > 0 {
-				add("    Plataformas: "+strings.Join(module.Platforms, ", "), muted)
+				add("Requiere: "+strings.Join(module.Depends, ", "), muted)
 			}
 		}
 		if m.resolveErr != nil {
-			add("Error de selección: "+m.resolveErr.Error(), warning)
-			add("Revisa los módulos y sus dependencias antes de continuar.", warning)
+			add(m.resolveErr.Error(), warning)
 		}
 	case preview:
-		add("VISTA PREVIA · solo lectura; todavía no se ha instalado nada", accent)
+		add("Revisión · sin cambios aún", accent)
+		add("Destino: "+m.codexHome, muted)
+		add("", plain)
 		if m.building {
-			add("Comprobando dependencias y preparando el plan…", muted)
+			add("Preparando…", muted)
 		} else if m.planErr != nil {
 			add("No se puede instalar: "+m.planErr.Error(), warning)
-			add("Corrige el problema indicado. Pulsa r para cambiar la selección y volver a comprobar; q cancela.", warning)
 		} else if m.plan != nil {
-			add("Módulos incluidos:", accent)
+			for _, role := range installer.ModelRoles {
+				choice := m.choices[role.ID]
+				add(role.Label+": "+choice.Model+" / "+choice.Effort, muted)
+			}
+			names := make([]string, 0, len(m.plan.Modules))
 			for _, module := range m.plan.Modules {
-				add("  • "+module.Name+" ("+module.ID+")", plain)
+				names = append(names, module.Name)
 			}
+			add("Módulos: "+strings.Join(names, ", "), plain)
 			for _, text := range m.plan.Warnings {
-				add("Advertencia: "+text, warning)
+				add("⚠ "+text, warning)
 			}
-			add(fmt.Sprintf("Archivos destino (%d):", len(m.plan.Changes)), accent)
+			add(fmt.Sprintf("Cambios (%d):", len(m.plan.Changes)), accent)
 			for _, change := range m.plan.Changes {
 				add("  ["+change.Kind+"] "+change.Path, plain)
 			}
 			if len(m.plan.Changes) == 0 {
-				add("Sin cambios de archivos previstos.", muted)
+				add("  Ninguno", muted)
 			}
-			add("CONFIRMACIÓN: pulsa Enter para instalar este plan; r permite editar y q cancela.", accent)
 		}
 	case installing:
-		add("INSTALANDO · no cierres la terminal", accent)
-		add("La transacción debe terminar antes de salir. ↑/↓ y PgUp/PgDn: registro.", warning)
 		if len(m.logs) == 0 {
-			add("Iniciando instalación…", muted)
+			add("Iniciando…", muted)
 		}
 		for _, line := range m.logs {
-			add("  "+line, plain)
+			add(line, plain)
 		}
 	case finished:
 		if m.installErr != nil {
-			add("INSTALACIÓN FALLIDA", warning)
+			add("Instalación fallida", warning)
 			add(m.installErr.Error(), warning)
-			add("Revisa el error y el respaldo, si existe, antes de volver a intentarlo.", muted)
 		} else {
-			add("INSTALACIÓN COMPLETADA", accent)
+			add("✓ Instalación completada", accent)
 		}
 		add(fmt.Sprintf("Archivos cambiados: %d", m.result.Changed), plain)
 		if m.result.BackupDir != "" {
 			add("Respaldo: "+m.result.BackupDir, plain)
 		}
-		add("Enter o q: cerrar", muted)
-		if len(m.logs) > 0 {
-			add("Registro reciente:", accent)
+		if m.installErr != nil && len(m.logs) > 0 {
+			add("", plain)
+			add("Últimos pasos:", muted)
 			for _, line := range m.logs {
-				add("  "+line, plain)
+				add(line, plain)
 			}
 		}
 	}
@@ -469,24 +566,26 @@ func (m *model) View() tea.View {
 	for len(body) < capacity {
 		body = append(body, "")
 	}
-	title := []string{"1/3 · Módulos", "2/3 · Revisión", "3/3 · Instalación", "Resultado"}[m.stage]
-	foot := "Enter: revisar · Espacio: marcar · q/esc: cancelar"
+	title := []string{"1/3  Módulos", "2/3  Revisión", "3/3  Instalación", "Resultado", "Modelos"}[m.stage]
+	foot := "↑/↓ mover · espacio marcar · m modelos · a todos · n ninguno · enter revisar · q salir"
 	switch m.stage {
+	case modelSetup:
+		foot = "↑/↓ rol · ←/→ modelo · tab esfuerzo · d preset · enter volver"
 	case preview:
-		foot = "Enter: instalar · r: editar · q/esc: cancelar"
+		foot = "enter instalar · r editar · q cancelar"
 		if m.building || m.planErr != nil {
-			foot = "r: editar · q/esc: cancelar"
+			foot = "r editar · q cancelar"
 		}
 	case installing:
-		foot = "Espera al resultado · salida bloqueada"
+		foot = "instalando · salida bloqueada"
 	case finished:
-		foot = "Enter/q: cerrar"
+		foot = "enter/q cerrar"
 	}
 	if len(lines) > capacity {
 		foot = fmt.Sprintf("↕ %d–%d/%d · PgUp/PgDn · ", offset+1, end, len(lines)) + foot
 	}
 	if m.height >= 3 {
-		body = append([]string{accent.Render("CODEX SETUP · " + title)}, body...)
+		body = append([]string{accent.Render("Codex Setup  ·  " + title)}, body...)
 		body = append(body, muted.Render(foot))
 	} else if m.height == 2 {
 		body = append(body, muted.Render(foot))

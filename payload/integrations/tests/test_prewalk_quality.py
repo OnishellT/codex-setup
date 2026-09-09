@@ -2,6 +2,7 @@ import json
 import hashlib
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -100,6 +101,22 @@ print(json.dumps({'version': '2.1.0', 'runs': [{'tool': {'driver': {'name': 'qlt
         config.write_text("[[source]]\nbranch = 'main'\n")
         self.assertNotEqual(self.helper("setup", "--repo", str(self.repo), check=False).returncode, 0)
         self.assertEqual(config.read_text(), "[[source]]\nbranch = 'main'\n")
+
+    def test_prefers_installer_managed_qlty_over_path(self):
+        integration = Path(self.temp.name) / "integration" / "prewalk"
+        managed_bin = integration / "bin"
+        managed_bin.mkdir(parents=True)
+        shutil.copy2(HELPER, integration / "quality.py")
+        managed = managed_bin / "qlty"
+        shutil.copy2(self.bin / "qlty", managed)
+        managed.write_text(managed.read_text().replace("qlty test 1", "qlty managed"))
+        managed.chmod(0o755)
+        config = self.repo / ".qlty" / "qlty.toml"
+        config.parent.mkdir()
+        config.write_text("config_version = '1'\n")
+        result = run(sys.executable, str(integration / "quality.py"), "setup", "--repo", str(self.repo),
+                     env={"PATH": str(self.bin) + os.pathsep + os.environ["PATH"], "QLTY_LOG": str(self.log)})
+        self.assertEqual(json.loads(result.stdout)["version"], "qlty managed")
 
     def test_init_validates_and_commits_only_qlty(self):
         result = self.helper("setup", "--repo", str(self.repo))

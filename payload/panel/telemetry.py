@@ -79,6 +79,9 @@ class Telemetry:
         self._seen_events = set()
         self._events = deque(maxlen=self.EVENT_LIMIT)
         self._pending = []
+        self._context_input_tokens = None
+        self._model_context_window = None
+        self._context_position = None
 
     @staticmethod
     def _position(record):
@@ -117,6 +120,15 @@ class Telemetry:
                                   for key, value in minimum.items()):
                 unresolved.append((pending_position, minimum))
         self._pending = unresolved
+
+    def _context_snapshot(self, info, record):
+        position = self._position(record)
+        if self._context_position is not None and not self._later(position, self._context_position):
+            return
+        self._context_input_tokens = _counter(info.get("last_token_usage", {}).get("input_tokens")) \
+            if isinstance(info.get("last_token_usage"), Mapping) else None
+        self._model_context_window = _counter(info.get("model_context_window"))
+        self._context_position = position
 
     def _request_key(self, payload, record):
         response_id = _string(payload.get("response_id"))
@@ -176,6 +188,7 @@ class Telemetry:
         elif kind == "event_msg" and payload.get("type") == "token_count":
             info = payload.get("info")
             if isinstance(info, Mapping):
+                self._context_snapshot(info, record)
                 counts = _usage(info.get("total_token_usage"))
                 if counts:
                     self._snapshot(counts, record)
@@ -204,5 +217,7 @@ class Telemetry:
             "identity": self.identity,
             "tokens": values["total_tokens"],
             **{key: values[key] for key in _FIELDS if key != "total_tokens"},
+            "context_input_tokens": self._context_input_tokens,
+            "model_context_window": self._model_context_window,
             "communication_events": [dict(event) for event in self._events],
         }

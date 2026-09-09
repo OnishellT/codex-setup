@@ -60,6 +60,12 @@ class TmuxTests(unittest.TestCase):
         self.assertIn("send-keys C-s", binding)
         self.assertNotIn("kill-pane", binding)
 
+        shift_enter = "\n".join(line for line in tmux(self.state, "list-keys", "-T", "root").splitlines()
+                                    if "S-Enter" in line)
+        self.assertIn(self.left, shift_enter)
+        self.assertIn("send-keys Escape '[13;2u'", shift_enter)
+        self.assertIn("send-keys Enter", shift_enter)
+
     def test_styles_are_scoped_and_never_use_syntax_background(self):
         other = tmux(self.state, "new-session", "-d", "-P", "-F", "#{pane_id}", "-s", "unrelated", "sleep 120")
         tmux(self.state, "set-option", "-t", "unrelated", "status-style", "bg=red")

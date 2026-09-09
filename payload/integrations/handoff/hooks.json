@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "Stop": [{
+      "hooks": [{
+        "type": "command",
+        "command": "python3 {{CODEX_HOME_SHELL}}/integrations/handoff/context.py hook",
+        "timeout": 3,
+        "statusMessage": "[codex-setup:context-handoff] Checking active context"
+      }]
+    }],
+    "PostCompact": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "python3 {{CODEX_HOME_SHELL}}/integrations/handoff/context.py hook",
+        "timeout": 3,
+        "statusMessage": "[codex-setup:context-handoff] Resetting context alert"
+      }]
+    }]
+  }
+}

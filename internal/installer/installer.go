@@ -2,6 +2,7 @@ package installer
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,7 +10,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"sort"
 	"strings"
@@ -38,6 +38,7 @@ type Engine struct {
 	Modules         []Module
 	Home, CodexHome string
 	assets          fs.FS
+	modelChoices    map[string]ModelChoice
 }
 type Change struct {
 	Path, Kind         string
@@ -50,10 +51,16 @@ type Plan struct {
 	Changes  []Change
 	Warnings []string
 	owner    *Engine
+	actions  []postAction
 }
 type Result struct {
 	BackupDir string
 	Changed   int
+}
+
+type postAction struct {
+	Kind string
+	Path string
 }
 
 func New(assets fs.FS, home, codexHome string) (*Engine, error) {
@@ -214,6 +221,14 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 	if len(modules) == 0 {
 		return nil, errors.New("selecciona al menos un módulo")
 	}
+	for _, m := range modules {
+		if m.ID == "zg" {
+			if err := e.checkZG(); err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
 	p := &Plan{Modules: modules, owner: e}
 	changes := map[string]*Change{}
 	get := func(filename string) (*Change, error) {
@@ -235,7 +250,7 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 			}
 			c.data = bytes.Clone(c.original)
 			c.existed = true
-			c.mode = info.Mode().Perm()
+			c.mode = writableMode(info.Mode())
 			c.originalMode = c.mode
 			c.Kind = "actualizar"
 		} else if !errors.Is(err, os.ErrNotExist) {
@@ -269,6 +284,7 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 		if err = toml.Unmarshal(b, &addition); err != nil {
 			return err
 		}
+		expandConfigPaths(addition, e.CodexHome)
 		before := fmt.Sprintf("%#v", original)
 		mergeMap(original, addition)
 		if before == fmt.Sprintf("%#v", original) && c.existed {
@@ -283,6 +299,7 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 		return err
 	}
 	hooksRequested := false
+	nativeRequested := false
 	for _, m := range modules {
 		for _, op := range m.Operations {
 			if op.Kind == "panel" {
@@ -296,7 +313,7 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 				return nil, err
 			}
 			switch op.Kind {
-			case "copy", "copy-if-missing", "append", "merge", "developer-instructions":
+			case "copy", "copy-if-missing", "template-copy", "append", "merge", "developer-instructions", "agent-instructions", "prewalk-settings", "prewalk-config":
 				b, err := fs.ReadFile(e.assets, op.Source)
 				if err != nil {
 					return nil, err
@@ -313,6 +330,8 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 						}
 					}
 					err = put(target, b, 0644)
+				case "template-copy":
+					err = put(target, expandCodexHomeShell(b, e.CodexHome), 0644)
 				case "merge":
 					err = merge(target, b)
 				case "developer-instructions":
@@ -328,7 +347,7 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 					if !ok && settings["developer_instructions"] != nil {
 						return nil, errors.New("developer_instructions debe ser texto")
 					}
-					updated, er := managedBlock([]byte(current), b, m.ID)
+					updated, er := managedBlock([]byte(current), expandCodexHomeShell(b, e.CodexHome), m.ID)
 					if er != nil {
 						return nil, er
 					}
@@ -343,6 +362,12 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 						return nil, er
 					}
 					c.data, err = managedBlock(c.data, b, m.ID)
+				case "agent-instructions":
+					err = e.agentInstructions(p, target, b, get)
+				case "prewalk-settings":
+					err = e.prewalkSettings(p, target, b, get)
+				case "prewalk-config":
+					err = e.prewalkConfig(p, target, b, get)
 				}
 				if err != nil {
 					return nil, err
@@ -368,7 +393,7 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 						return er
 					}
 					mode := fs.FileMode(0644)
-					if strings.HasSuffix(src, ".sh") {
+					if strings.HasSuffix(src, ".sh") || bytes.HasPrefix(b, []byte("#!")) {
 						mode = 0755
 					}
 					return put(dst, b, mode)
@@ -454,14 +479,28 @@ func (e *Engine) BuildPlan(ids []string) (*Plan, error) {
 				if err = e.mergeHooks(p, m.ID, op.Source, get); err != nil {
 					return nil, err
 				}
+			case "qlty-install":
+				if err = e.planQltyInstall(target, get, put); err != nil {
+					return nil, err
+				}
+			case "native-config":
+				nativeRequested = true
 			default:
 				return nil, fmt.Errorf("operación desconocida: %s", op.Kind)
 			}
+		}
+		if m.ID == "prewalk" {
+			p.Warnings = append(p.Warnings, prewalkHookWarnings()...)
 		}
 	}
 	// TOML operations can arrive in any selected-module order. Apply the single
 	// hooks feature flag after all of them so an older base fragment cannot turn
 	// it back off in the same atomic installation plan.
+	if nativeRequested {
+		if err = e.nativeConfig(p, get); err != nil {
+			return nil, err
+		}
+	}
 	if hooksRequested {
 		if err = e.enableHooksFeature(get); err != nil {
 			return nil, err
@@ -490,6 +529,27 @@ func mergeMap(dst, src map[string]any) {
 	}
 }
 
+func expandConfigPaths(value any, codexHome string) {
+	switch value := value.(type) {
+	case map[string]any:
+		for key, child := range value {
+			if text, ok := child.(string); ok {
+				value[key] = strings.ReplaceAll(text, "{{CODEX_HOME}}", codexHome)
+				continue
+			}
+			expandConfigPaths(child, codexHome)
+		}
+	case []any:
+		for _, child := range value {
+			expandConfigPaths(child, codexHome)
+		}
+	case []string:
+		for i, child := range value {
+			value[i] = strings.ReplaceAll(child, "{{CODEX_HOME}}", codexHome)
+		}
+	}
+}
+
 func managedBlock(existing, addition []byte, id string) ([]byte, error) {
 	text := string(existing)
 	body := strings.TrimSpace(string(addition))
@@ -501,6 +561,12 @@ func managedBlock(existing, addition []byte, id string) ([]byte, error) {
 		return nil, errors.New("bloque de instrucciones incompleto/duplicado; revisa antes de instalar")
 	}
 	if a >= 0 {
+		prefix := strings.TrimSpace(text[:a])
+		if legacyInstructionPrefixHashes[id][fmt.Sprintf("%x", sha256.Sum256([]byte(prefix)))] {
+			text = text[a:]
+			a = 0
+			b = strings.Index(text, end)
+		}
 		return []byte(text[:a] + block + text[b+len(end):]), nil
 	}
 	if strings.Contains(text, body) {
@@ -510,6 +576,13 @@ func managedBlock(existing, addition []byte, id string) ([]byte, error) {
 		return []byte(block + "\n"), nil
 	}
 	return []byte(strings.TrimRight(text, "\n") + "\n\n" + block + "\n"), nil
+}
+
+var legacyInstructionPrefixHashes = map[string]map[string]bool{
+	"agents": {
+		// Delegation policy installed before managed markers were introduced.
+		"f922773a91ff609335ffaee2a55bae90506047fa81f71c6b261d2b482a28b603": true,
+	},
 }
 
 type backupEntry struct {
@@ -533,7 +606,7 @@ func (e *Engine) Apply(p *Plan, progress func(string)) (Result, error) {
 			return result, err
 		}
 	}
-	if len(p.Changes) == 0 {
+	if len(p.Changes) == 0 && len(p.actions) == 0 {
 		return result, nil
 	}
 	backupRoot := filepath.Join(e.Home, ".local", "state", "codex-setup", "backups")
@@ -598,8 +671,52 @@ func (e *Engine) Apply(p *Plan, progress func(string)) (Result, error) {
 		applied = append(applied, c)
 		result.Changed++
 	}
+	for _, action := range p.actions {
+		progress("configurar " + action.Path)
+		output, actionErr := e.runAction(action)
+		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			if line != "" {
+				progress(line)
+			}
+		}
+		if actionErr != nil {
+			return rollback(actionErr)
+		}
+	}
 	progress(fmt.Sprintf("Listo: %d archivos; respaldo: %s", result.Changed, dir))
 	return result, nil
+}
+
+func (e *Engine) runAction(action postAction) ([]byte, error) {
+	if action.Kind == "ensure-private-dir" {
+		return nil, ensurePrivateDir(action.Path)
+	}
+	return nil, fmt.Errorf("acción desconocida: %s", action.Kind)
+}
+
+func ensurePrivateDir(dir string) error {
+	if err := checkPath(dir); err != nil {
+		return err
+	}
+	info, err := os.Stat(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		if err = os.MkdirAll(dir, 0700); err != nil {
+			return err
+		}
+		info, err = os.Stat(dir)
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("destino no es un directorio: %s", dir)
+	}
+	if info.Mode().Perm() != 0700 {
+		if err = os.Chmod(dir, 0700); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func unchanged(c Change) error {
@@ -617,10 +734,14 @@ func unchanged(c Change) error {
 	if err != nil {
 		return err
 	}
-	if !c.existed || !bytes.Equal(b, c.original) || !reflect.DeepEqual(info.Mode().Perm(), c.originalMode) {
+	if !c.existed || !bytes.Equal(b, c.original) || writableMode(info.Mode()) != c.originalMode {
 		return fmt.Errorf("el destino cambió desde la vista previa: %s", c.Path)
 	}
 	return nil
+}
+
+func writableMode(mode fs.FileMode) fs.FileMode {
+	return mode.Perm() | mode&(fs.ModeSetuid|fs.ModeSetgid|fs.ModeSticky)
 }
 
 func atomicWrite(filename string, b []byte, mode fs.FileMode) error {
@@ -635,8 +756,8 @@ func atomicWrite(filename string, b []byte, mode fs.FileMode) error {
 		return err
 	}
 	defer os.Remove(f.Name())
-	if err = f.Chmod(mode); err == nil {
-		_, err = f.Write(b)
+	if _, err = f.Write(b); err == nil {
+		err = f.Chmod(mode)
 	}
 	if err == nil {
 		err = f.Sync()

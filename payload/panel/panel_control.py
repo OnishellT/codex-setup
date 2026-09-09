@@ -37,6 +37,9 @@ def install(binary, session, runtime, left, right, width, profile):
     # The binding acts ONLY on these two panes, even inside this dedicated server.
     tmux(state, "bind-key", "-n", "C-s", "if-shell", "-F", condition,
          "run-shell " + shlex.quote(command), "send-keys C-s")
+    left_condition = "#{==:#{pane_id}," + left + "}"
+    tmux(state, "bind-key", "-n", "S-Enter", "if-shell", "-F", left_condition,
+         "send-keys Escape '[13;2u'", "send-keys Enter")
     tmux(state, "set-option", "-t", session, "status-left", " Codex ")
     # The parked monitor's window must not look like a second conversation tab.
     tmux(state, "set-window-option", "-g", "window-status-format", "")

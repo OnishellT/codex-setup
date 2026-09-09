@@ -36,6 +36,7 @@ panel izquierdo; hasta entonces el monitor espera la creación de la sesión.
 
 ## Controles
 
+- En el editor de Codex, **Enter** envía el mensaje y **Shift+Enter** inserta una nueva línea.
 - Haz clic en un panel para enfocarlo, o pulsa `Ctrl-b` y luego una flecha.
 - **Ctrl-S**, sin prefijo: oculta/muestra el panel desde Codex o desde el monitor.
   El monitor se mueve a una ventana aparcada, no se termina ni se reinicia.
@@ -49,10 +50,10 @@ panel izquierdo; hasta entonces el monitor espera la creación de la sesión.
 - En el monitor, `q`/Esc también lo ocultan; no lo eliminan.
 - `Ctrl-b`, luego `z`: amplía/restaura el panel enfocado.
 - `Ctrl-b`, luego `d`: desconecta la vista sin parar Codex.
-- Sal de Codex normalmente. Para cerrar también el monitor usa `Ctrl-b`, luego `&`
-  y confirma el cierre de la ventana. Si estaba oculto, abre/cierra la ventana
-  aparcada con los controles normales de tmux. No cierres toda la sesión mientras
-  quieras mantener trabajando a Codex.
+- Al terminar Codex (normalmente o por Ctrl-C), el supervisor registra su estado
+  y cierra automáticamente esta sesión aislada, incluido el monitor. No hace falta
+  pulsar Ctrl-C una segunda vez. Si Codex maneja Ctrl-C y continúa, la sesión sigue
+  intacta. `Ctrl-b`, luego `d`, sólo desconecta y conserva la sesión para reconectar.
 - Usa `/agent` dentro de Codex para controlar o inspeccionar un subagente. El monitor no lo controla.
 
 Para reconectar una vista desconectada:
