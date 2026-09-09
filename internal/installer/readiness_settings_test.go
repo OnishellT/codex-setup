@@ -99,6 +99,10 @@ func TestReadinessPrewalkConfigPreservesPermissions(t *testing.T) {
 	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{source: &fstest.MapFile{Data: []byte("sandbox_mode='workspace-write'\napproval_policy='on-request'\napprovals_reviewer='auto_review'\n[features]\nhooks=true\n")}}}
 	op := Operation{Kind: "prewalk-config", Source: source, Root: "codex", Target: readinessConfigName}
 	target := filepath.Join(e.CodexHome, op.Target)
+	root := filepath.Join(e.CodexHome, "worktrees", "prewalk")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	for _, valid := range []bool{false, true} {
 		data := "sandbox_mode='read-only'\napproval_policy='never'\napprovals_reviewer='user'\n[features]\nhooks=true\n"
 		if valid {
@@ -114,6 +118,35 @@ func TestReadinessPrewalkConfigPreservesPermissions(t *testing.T) {
 		if err != nil || string(after) != data {
 			t.Fatal("check mutated configuration")
 		}
+	}
+	checkPrewalkRootState(t, e, op, root)
+}
+
+func checkPrewalkRootState(t *testing.T, e *Engine, op Operation, root string) {
+	t.Helper()
+	if err := os.Chmod(root, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.checkInstalledOperation("fixture", op); err == nil {
+		t.Fatal("nonprivate root accepted")
+	}
+	if info, err := os.Stat(root); err != nil || info.Mode().Perm() != 0755 {
+		t.Fatal("check changed root permissions")
+	}
+	if err := os.Remove(root); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.checkInstalledOperation("fixture", op); err == nil {
+		t.Fatal("missing root accepted")
+	}
+	if _, err := os.Lstat(root); !os.IsNotExist(err) {
+		t.Fatal("check recreated root")
+	}
+	if err := os.Symlink(t.TempDir(), root); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.checkInstalledOperation("fixture", op); err == nil {
+		t.Fatal("symlink root accepted")
 	}
 }
 

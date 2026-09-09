@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 
@@ -97,8 +98,15 @@ func (e *Engine) checkInstalledPrewalkConfig(op Operation, target string) error 
 	get := func(string) (*Change, error) { return change, nil }
 	// Reuse the installer's merge in memory; it preserves explicit permissions
 	// and extra writable roots. No post-action or file write is applied here.
-	if err := e.prewalkConfig(&Plan{}, target, source, get); err != nil {
+	plan := &Plan{}
+	if err := e.prewalkConfig(plan, target, source, get); err != nil {
 		return err
+	}
+	if err := checkPath(filepath.Join(e.CodexHome, "worktrees", "prewalk")); err != nil {
+		return err
+	}
+	if len(plan.actions) != 0 {
+		return fmt.Errorf("Prewalk: la raíz de worktrees debe existir como directorio privado 0700")
 	}
 	var expected map[string]any
 	if err := toml.Unmarshal(change.data, &expected); err != nil {
