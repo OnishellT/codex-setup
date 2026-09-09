@@ -95,7 +95,7 @@ func TestPackageCommandsUbuntuAndArch(t *testing.T) {
 		release, family string
 		missing         []string
 		want            [][]string
-	}{{"ID=ubuntu\nID_LIKE=debian\n", "apt", []string{"xz"}, [][]string{{"update"}, {"install", "-y", "xz-utils"}}}, {"ID=arch\n", "pacman", []string{"python3"}, [][]string{{"-S", "--needed", "--noconfirm", "python"}}}} {
+	}{{"ID=ubuntu\nVERSION_ID=24.04\n", "apt", []string{"xz"}, [][]string{{"update"}, {"install", "-y", "xz-utils"}}}, {"ID=arch\n", "pacman", []string{"python3"}, [][]string{{"-S", "--needed", "--noconfirm", "python"}}}} {
 		release := filepath.Join(t.TempDir(), "os-release")
 		if err := os.WriteFile(release, []byte(tc.release), 0600); err != nil {
 			t.Fatal(err)
@@ -155,7 +155,7 @@ func TestInstallDependenciesSuccessfulFakeRecheck(t *testing.T) {
 	oldOS := dependencyOSRelease
 	t.Cleanup(func() { dependencyOSRelease = oldOS })
 	release := filepath.Join(t.TempDir(), "os-release")
-	if err := os.WriteFile(release, []byte("ID=ubuntu\n"), 0600); err != nil {
+	if err := os.WriteFile(release, []byte("ID=ubuntu\nVERSION_ID=24.04\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	dependencyOSRelease = release

@@ -81,6 +81,9 @@ func (e *Engine) PlanDependencies(ids []string) (*DependencyPlan, error) {
 		p.signature = dependencySignature(p)
 		return p, nil
 	}
+	if contains(p.Missing, depNode22) {
+		return nil, errors.New("zg requiere Node.js >= 22; no se instala automáticamente desde paquetes nativos")
+	}
 	p.Commands, err = dependencyCommands(p.Missing)
 	if err != nil {
 		return nil, fmt.Errorf("faltan dependencias (%s): %w", strings.Join(p.Missing, ", "), err)
@@ -194,7 +197,7 @@ func dependencySatisfied(req dependencyRequirement) bool {
 		args = []string{"-V"}
 	}
 	if req.binary == "python3" {
-		args = []string{"-c", "import sys,curses; assert sys.version_info >= (3,11); assert curses.has_extended_color_support()"}
+		args = []string{"-c", "import sys; assert sys.version_info >= (3,11)"}
 		if req.name == depPythonModules {
 			args = []string{"-c", "import sys,curses,sqlite3,tomllib,fcntl; assert sys.version_info >= (3,11); assert curses.has_extended_color_support()"}
 		}
@@ -246,7 +249,10 @@ func packageManager() (packageManagerInfo, error) {
 			values[k] = strings.Trim(strings.TrimSpace(v), `"'`)
 		}
 	}
-	id := strings.Fields(strings.ToLower(values["ID"] + " " + values["ID_LIKE"]))
+	id := strings.Fields(strings.ToLower(values["ID"]))
+	if !supportedDistroVersion(values["ID"], values["VERSION_ID"]) {
+		return packageManagerInfo{}, errors.New("versión de distribución no soportada; requiere Ubuntu 24.04, Debian 12, Fedora 40 o Arch rolling")
+	}
 	for _, candidate := range []struct {
 		family string
 		ids    []string
@@ -262,6 +268,21 @@ func packageManager() (packageManagerInfo, error) {
 		return packageManagerInfo{}, fmt.Errorf("distribución %s requiere %s, pero no está disponible", values["ID"], command)
 	}
 	return packageManagerInfo{}, fmt.Errorf("distribución no soportada (%s); soportadas: Debian/Ubuntu, Fedora y Arch", values["ID"])
+}
+
+func supportedDistroVersion(id, version string) bool {
+	switch strings.ToLower(id) {
+	case "arch":
+		return true
+	case "ubuntu":
+		return version >= "24.04"
+	case "debian":
+		return version >= "12"
+	case "fedora":
+		return version >= "40"
+	default:
+		return false
+	}
 }
 
 func secureManagerPath(name string) (string, error) {
