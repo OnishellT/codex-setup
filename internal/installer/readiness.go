@@ -21,6 +21,9 @@ func (e *Engine) CheckReadiness(ids []string, status *AccountStatus) (*Readiness
 		return nil, err
 	}
 	r := &Readiness{}
+	if e.CodexHome != "" && status != nil && len(status.Models) > 0 {
+		r.Pending = append(r.Pending, e.readinessFilesAndModels(modules, status)...)
+	}
 	for _, m := range modules {
 		for _, op := range m.Operations {
 			if op.Kind != "hooks-state" {
