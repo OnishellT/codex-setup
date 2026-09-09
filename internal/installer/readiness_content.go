@@ -45,8 +45,8 @@ func checkInstalledQlty(target string) error {
 		return fmt.Errorf("Qlty ausente o modificado")
 	}
 	info, err := os.Stat(target)
-	if err != nil || info.Mode().Perm()&0111 == 0 {
-		return fmt.Errorf("Qlty no ejecutable")
+	if err != nil || writableMode(info.Mode()) != 0755 {
+		return fmt.Errorf("Qlty requiere permisos 0755 sin bits especiales")
 	}
 	return nil
 }

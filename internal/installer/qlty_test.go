@@ -122,6 +122,36 @@ func TestDependencyPlanIdentifiesMissingQlty(t *testing.T) {
 	}
 }
 
+func TestQltyInstallRepairsUnsafeModes(t *testing.T) {
+	archive, binary := []byte("archive"), []byte("qlty binary")
+	withQltyFixture(t, archive, binary, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(archive) })
+	e := qltyTestEngine(t)
+	if err := e.installQlty(nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []fs.FileMode{0644, 0777, 0755 | fs.ModeSetuid, 0755 | fs.ModeSetgid} {
+		t.Run(mode.String(), func(t *testing.T) {
+			if err := os.Chmod(e.managedQlty(), mode); err != nil {
+				t.Fatal(err)
+			}
+			p, err := e.PlanDependencies([]string{"prewalk"})
+			if err != nil || !contains(p.Missing, depQlty) {
+				t.Fatalf("unsafe Qlty not pending: %v %v", p, err)
+			}
+			if e.qltyAvailable() {
+				t.Fatal("unsafe Qlty accepted")
+			}
+			if err := e.installQlty(nil); err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Stat(e.managedQlty())
+			if err != nil || writableMode(info.Mode()) != 0755 || !e.qltyAvailable() {
+				t.Fatalf("Qlty permissions not repaired: %v %v", info, err)
+			}
+		})
+	}
+}
+
 func TestQltyInstallRejectsCorruptDownloadWithoutMutation(t *testing.T) {
 	archive, binary := []byte("expected"), []byte("binary")
 	withQltyFixture(t, archive, binary, func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("corrupt")) })
