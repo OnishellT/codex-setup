@@ -1,6 +1,6 @@
 [mcp_servers.zvec_grep]
-command = "zg"
-args = ["server", "--stdio", "--mcp-toolset", "agent"]
+command = "{{CODEX_HOME}}/integrations/zg/node-v22.23.2/bin/node"
+args = ["{{CODEX_HOME}}/integrations/zg/packages-v0.2.1/node_modules/@zvec/zvec-grep/dist/cli/index.js", "server", "--stdio", "--mcp-toolset", "agent"]
 enabled = true
 required = false
 enabled_tools = ["zvec_grep_search"]

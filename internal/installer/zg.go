@@ -5,74 +5,73 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strconv"
 	"strings"
 	"time"
 )
 
 const zgHelper = "integrations/zg/pr86-watch-manager.mjs"
+const zgPackageVersion = "0.2.1"
+const zgCLI = "dist/cli/index.js"
+
+func (e *Engine) managedZGPackages() string {
+	return filepath.Join(e.CodexHome, "integrations", "zg", "packages-v"+zgPackageVersion)
+}
+
+func zgPackage(prefix string) string {
+	return filepath.Join(prefix, "node_modules", "@zvec", "zvec-grep")
+}
 
 func (e *Engine) checkZG() error {
-	node, err := exec.LookPath("node")
-	if err != nil {
-		return fmt.Errorf("zg requiere Node.js >= 22; instálalo antes de seleccionar el módulo")
+	if err := validateZGNode(filepath.Dir(filepath.Dir(e.managedZGNode()))); err != nil {
+		return err
 	}
-	version, err := run(3*time.Second, node, "--version")
-	if err != nil || nodeMajor(version) < 22 {
-		return fmt.Errorf("zg requiere Node.js >= 22 (detectado %q)", strings.TrimSpace(version))
-	}
-	npm, err := exec.LookPath("npm")
-	if err != nil {
-		return fmt.Errorf("zg requiere npm y @zvec/zvec-grep@0.2.1 instalados globalmente")
-	}
-	root, err := run(3*time.Second, npm, "root", "-g")
-	if err != nil || strings.TrimSpace(root) == "" {
-		return fmt.Errorf("no se pudo localizar npm global para zg: %s", strings.TrimSpace(root))
-	}
-	pkg := filepath.Join(strings.TrimSpace(root), "@zvec", "zvec-grep")
-	pkg, err = filepath.EvalSymlinks(pkg)
-	if err != nil {
-		return fmt.Errorf("falta @zvec/zvec-grep@0.2.1 en npm global (%s)", pkg)
+	return e.validateZGPackage(e.managedZGPackages())
+}
+
+func (e *Engine) validateZGPackage(prefix string) error {
+	pkg := zgPackage(prefix)
+	for _, filename := range []string{"package.json", zgCLI, "dist/daemon/watch-manager.js"} {
+		path := filepath.Join(pkg, filename)
+		if err := checkPath(path); err != nil {
+			return err
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			return fmt.Errorf("zg: falta archivo privado %s", filename)
+		}
 	}
 	manifest, err := os.ReadFile(filepath.Join(pkg, "package.json"))
 	if err != nil {
-		return fmt.Errorf("falta @zvec/zvec-grep@0.2.1 en npm global (%s)", pkg)
+		return err
 	}
 	var meta struct {
 		Name, Version string
 		Bin           map[string]string
 	}
-	if err = json.Unmarshal(manifest, &meta); err != nil || meta.Name != "@zvec/zvec-grep" || meta.Version != "0.2.1" || meta.Bin["zg"] == "" {
-		return fmt.Errorf("zg requiere @zvec/zvec-grep@0.2.1 en npm global (%s)", pkg)
+	if json.Unmarshal(manifest, &meta) != nil || meta.Name != "@zvec/zvec-grep" || meta.Version != zgPackageVersion || meta.Bin["zg"] != zgCLI {
+		return fmt.Errorf("zg: paquete privado no reconocido")
 	}
-	zg, err := exec.LookPath("zg")
-	if err != nil {
-		return fmt.Errorf("falta el comando zg del paquete @zvec/zvec-grep@0.2.1")
-	}
-	resolved, err := filepath.EvalSymlinks(zg)
-	expected, expectedErr := filepath.EvalSymlinks(filepath.Join(pkg, meta.Bin["zg"]))
-	if err != nil || expectedErr != nil || resolved != expected {
-		return fmt.Errorf("zg en PATH no pertenece al paquete global validado @zvec/zvec-grep@0.2.1")
-	}
-	if runtime.GOOS != "linux" {
-		return nil
-	}
-	helper, err := fs.ReadFile(e.assets, zgHelper)
-	if err != nil {
+	if err := e.zgPatch("check", pkg); err != nil {
 		return err
 	}
-	out, err := run(3*time.Second, node, "--input-type=module", "--eval", string(helper)+"\nconsole.log(await run(\"check\", process.argv[1]));", pkg)
-	if err != nil || strings.TrimSpace(out) != "patched" {
-		return fmt.Errorf("zg en Linux requiere el parche PR 86 verificado; ejecuta check/apply con %s antes de seleccionar el módulo (%s)", zgHelper, strings.TrimSpace(out))
+	// Imports and rg --version exercise native components without models or indices.
+	const check = `import {createRequire} from 'node:module'; import {pathToFileURL} from 'node:url'; import {accessSync,constants} from 'node:fs'; import {execFileSync} from 'node:child_process'; const require=createRequire(process.argv[1]+'/package.json'); for (const name of ['@zvec/zvec','onnxruntime-node','@huggingface/transformers']) await import(pathToFileURL(require.resolve(name))); const {rgPath}=require('@vscode/ripgrep'); accessSync(rgPath,constants.X_OK); execFileSync(rgPath,['--version']); console.log('ready');`
+	out, err := run(15*time.Second, e.managedZGNode(), "--input-type=module", "--eval", check, pkg)
+	if err != nil || strings.TrimSpace(out) != "ready" {
+		return fmt.Errorf("zg: componentes nativos no disponibles: %s", strings.TrimSpace(out))
 	}
 	return nil
 }
 
-func nodeMajor(version string) int {
-	major := strings.Split(strings.TrimPrefix(strings.TrimSpace(version), "v"), ".")[0]
-	n, _ := strconv.Atoi(major)
-	return n
+func (e *Engine) zgPatch(action, pkg string) error {
+	helper, err := fs.ReadFile(e.assets, zgHelper)
+	if err != nil {
+		return err
+	}
+	out, err := run(3*time.Second, e.managedZGNode(), "--input-type=module", "--eval", string(helper)+"\nconsole.log(await run(process.argv[1], process.argv[2]));", action, pkg)
+	if err != nil || strings.TrimSpace(out) != "patched" {
+		return fmt.Errorf("zg: parche Linux PR 86 no verificado: %s", strings.TrimSpace(out))
+	}
+	return nil
 }

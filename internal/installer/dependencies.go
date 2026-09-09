@@ -50,7 +50,7 @@ const (
 	depTmux          = "tmux >= 3.3"
 	depTic           = "tic (ncurses)"
 	depNode18        = "node >= 18"
-	depNode22        = "node >= 22"
+	depZG            = "zg privado (Node 22 + paquete 0.2.1 + parche Linux)"
 	depPython        = "python3"
 	depPythonModules = "python curses/sqlite3/tomllib/fcntl"
 	depCA            = "ca-certificates"
@@ -74,6 +74,9 @@ func (e *Engine) PlanDependencies(ids []string) (*DependencyPlan, error) {
 		if req.binary == "rtk" {
 			satisfied = e.rtkAvailable()
 		}
+		if req.name == depZG {
+			satisfied = e.checkZG() == nil
+		}
 		if satisfied {
 			continue
 		}
@@ -83,15 +86,15 @@ func (e *Engine) PlanDependencies(ids []string) (*DependencyPlan, error) {
 		p.signature = dependencySignature(p)
 		return p, nil
 	}
-	if contains(p.Missing, depNode22) {
-		return nil, errors.New("zg requiere Node.js >= 22; no se instala automáticamente desde paquetes nativos")
-	}
 	p.Commands, err = dependencyCommands(p.Missing)
 	if err != nil {
 		return nil, fmt.Errorf("faltan dependencias (%s): %w", strings.Join(p.Missing, ", "), err)
 	}
 	if contains(p.Missing, "rtk") {
 		p.Warnings = append(p.Warnings, "RTK se descargará y verificará en CODEX_HOME/integrations/rtk/bin/rtk tras tu consentimiento.")
+	}
+	if contains(p.Missing, depZG) {
+		p.Warnings = append(p.Warnings, "zg descargará Node y el paquete verificados en CODEX_HOME/integrations/zg; no crea modelos ni índices.")
 	}
 	p.signature = dependencySignature(p)
 	return p, nil
@@ -100,7 +103,7 @@ func (e *Engine) PlanDependencies(ids []string) (*DependencyPlan, error) {
 func dependencyCommands(missing []string) ([]DependencyCommand, error) {
 	packageMissing := make([]string, 0, len(missing))
 	for _, item := range missing {
-		if item != "rtk" {
+		if item != "rtk" && item != depZG {
 			packageMissing = append(packageMissing, item)
 		}
 	}
@@ -162,8 +165,8 @@ func selectedRequirements(modules []Module) []dependencyRequirement {
 		case "context-handoff":
 			add(dependencyRequirement{depPython, "python3", "3.11"})
 		case "zg":
-			add(dependencyRequirement{depNode22, "node", "22"})
-			add(dependencyRequirement{"npm", "npm", ""})
+			add(dependencyRequirement{depZG, "", ""})
+			add(dependencyRequirement{depCA, depCA, ""})
 		case "rtk":
 			add(dependencyRequirement{depPython, "python3", "3.11"})
 			// RTK is managed by the installer, not the host package manager.
@@ -171,11 +174,8 @@ func selectedRequirements(modules []Module) []dependencyRequirement {
 			add(dependencyRequirement{depCA, depCA, ""})
 		}
 	}
-	if seen[depNode22] {
-		delete(seen, depNode18)
-	}
 	out := make([]dependencyRequirement, 0, len(seen))
-	for _, req := range []dependencyRequirement{{depPython, "python3", "3.11"}, {"python curses/sqlite3/tomllib/fcntl", "python3", "3.11"}, {"git", "git", ""}, {"tar", "tar", ""}, {"xz", "xz", ""}, {depCA, depCA, ""}, {depTmux, "tmux", "3.3"}, {depTic, "tic", ""}, {depNode18, "node", "18"}, {depNode22, "node", "22"}, {"npm", "npm", ""}, {"rtk", "rtk", "0.23"}} {
+	for _, req := range []dependencyRequirement{{depPython, "python3", "3.11"}, {depPythonModules, "python3", "3.11"}, {"git", "git", ""}, {"tar", "tar", ""}, {"xz", "xz", ""}, {depCA, depCA, ""}, {depTmux, "tmux", "3.3"}, {depTic, "tic", ""}, {depNode18, "node", "18"}, {depZG, "", ""}, {"rtk", "rtk", "0.23"}} {
 		if seen[req.name] {
 			out = append(out, req)
 		}
@@ -380,7 +380,7 @@ func (m packageManagerInfo) requirementPackages(item string) []string {
 			return []string{"ncurses-bin"}
 		}
 		return []string{"ncurses"}
-	case depNode18, depNode22:
+	case depNode18:
 		return []string{"nodejs"}
 	case "npm", "git", "tar", depCA:
 		return []string{item}
@@ -428,6 +428,11 @@ func (e *Engine) InstallDependencies(p *DependencyPlan, stdin io.Reader, stdout,
 	}
 	if contains(p.Missing, "rtk") {
 		if err := e.installRTK(stdout); err != nil {
+			return err
+		}
+	}
+	if contains(p.Missing, depZG) {
+		if err := e.installZG(stdout, stderr); err != nil {
 			return err
 		}
 	}

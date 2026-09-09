@@ -540,7 +540,11 @@ func expandConfigPaths(value any, codexHome string) {
 			expandConfigPaths(child, codexHome)
 		}
 	case []any:
-		for _, child := range value {
+		for i, child := range value {
+			if text, ok := child.(string); ok {
+				value[i] = strings.ReplaceAll(text, "{{CODEX_HOME}}", codexHome)
+				continue
+			}
 			expandConfigPaths(child, codexHome)
 		}
 	case []string:
