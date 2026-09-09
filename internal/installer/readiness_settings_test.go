@@ -8,6 +8,8 @@ import (
 	"testing/fstest"
 )
 
+const readinessConfigName = "config.toml"
+
 func TestReadinessManagedInstructions(t *testing.T) {
 	const source = "policy.md"
 	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{source: &fstest.MapFile{Data: []byte("managed policy")}}}
@@ -95,7 +97,7 @@ func TestReadinessPrewalkSettingsAndRole(t *testing.T) {
 func TestReadinessPrewalkConfigPreservesPermissions(t *testing.T) {
 	const source = "prewalk.toml"
 	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{source: &fstest.MapFile{Data: []byte("sandbox_mode='workspace-write'\napproval_policy='on-request'\napprovals_reviewer='auto_review'\n[features]\nhooks=true\n")}}}
-	op := Operation{Kind: "prewalk-config", Source: source, Root: "codex", Target: "config.toml"}
+	op := Operation{Kind: "prewalk-config", Source: source, Root: "codex", Target: readinessConfigName}
 	target := filepath.Join(e.CodexHome, op.Target)
 	for _, valid := range []bool{false, true} {
 		data := "sandbox_mode='read-only'\napproval_policy='never'\napprovals_reviewer='user'\n[features]\nhooks=true\n"
@@ -118,7 +120,7 @@ func TestReadinessPrewalkConfigPreservesPermissions(t *testing.T) {
 func TestReadinessBaseHooksAllowSelectedOverride(t *testing.T) {
 	const source = "config/base.toml"
 	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{source: &fstest.MapFile{Data: []byte("[features]\nhooks=false\n")}}}
-	op := Operation{Kind: "merge", Source: source, Root: "codex", Target: "config.toml"}
+	op := Operation{Kind: "merge", Source: source, Root: "codex", Target: readinessConfigName}
 	if err := os.WriteFile(filepath.Join(e.CodexHome, op.Target), []byte("model_provider='openai'\n[features]\nhooks=true\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +133,7 @@ func TestReadinessBaseHooksAllowSelectedOverride(t *testing.T) {
 }
 
 func TestReadinessProviderMatchesNativeAccount(t *testing.T) {
-	target := filepath.Join(t.TempDir(), "config.toml")
+	target := filepath.Join(t.TempDir(), readinessConfigName)
 	for _, provider := range []string{"openai", "", "external"} {
 		if err := os.WriteFile(target, []byte(fmt.Sprintf("model_provider=%q\n", provider)), 0600); err != nil {
 			t.Fatal(err)

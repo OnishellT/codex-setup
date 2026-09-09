@@ -430,6 +430,20 @@ func (e *Engine) InstallDependencies(p *DependencyPlan, stdin io.Reader, stdout,
 			return err
 		}
 	}
+	if err := e.installManagedDependencies(p, stdout, stderr); err != nil {
+		return err
+	}
+	check, err := e.PlanDependencies(p.ids)
+	if err != nil {
+		return fmt.Errorf("no se pudieron revalidar dependencias: %w", err)
+	}
+	if check.NeedsInstall() {
+		return fmt.Errorf("la instalación terminó, pero aún faltan: %s", strings.Join(check.Missing, ", "))
+	}
+	return nil
+}
+
+func (e *Engine) installManagedDependencies(p *DependencyPlan, stdout, stderr io.Writer) error {
 	if contains(p.Missing, "rtk") {
 		if err := e.installRTK(stdout); err != nil {
 			return err
@@ -444,13 +458,6 @@ func (e *Engine) InstallDependencies(p *DependencyPlan, stdin io.Reader, stdout,
 		if err := e.installQlty(stdout); err != nil {
 			return err
 		}
-	}
-	check, err := e.PlanDependencies(p.ids)
-	if err != nil {
-		return fmt.Errorf("no se pudieron revalidar dependencias: %w", err)
-	}
-	if check.NeedsInstall() {
-		return fmt.Errorf("la instalación terminó, pero aún faltan: %s", strings.Join(check.Missing, ", "))
 	}
 	return nil
 }

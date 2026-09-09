@@ -10,6 +10,7 @@ import (
 
 const cliDryRun = "--dry-run"
 const cliInstallDeps = "--install-deps"
+const cliHome, cliModules, cliCheck = "--home", "--modules", "--check"
 
 func mockCLIAccount(t *testing.T) {
 	t.Helper()
@@ -40,7 +41,7 @@ for line in sys.stdin:
 func TestCLIAccountPreviewInstallAndReadOnlyCheck(t *testing.T) {
 	mockCLIAccount(t)
 	home := t.TempDir()
-	args := []string{"--home", home, "--modules", "base"}
+	args := []string{cliHome, home, cliModules, "base"}
 	if err := runCLIArgs(append(args, cliDryRun)); err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +56,7 @@ func TestCLIAccountPreviewInstallAndReadOnlyCheck(t *testing.T) {
 	if err != nil || !strings.Contains(string(before), "account-only") {
 		t.Fatalf("account model not installed: %s %v", before, err)
 	}
-	if err := runCLIArgs(append(args, "--check")); err != nil {
+	if err := runCLIArgs(append(args, cliCheck)); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(config)
@@ -63,7 +64,7 @@ func TestCLIAccountPreviewInstallAndReadOnlyCheck(t *testing.T) {
 		t.Fatal("check changed config")
 	}
 	t.Setenv("MOCK_NO_LOGIN", "1")
-	if err := runCLIArgs(append(args, "--check")); err == nil {
+	if err := runCLIArgs(append(args, cliCheck)); err == nil {
 		t.Fatal("missing login reported ready")
 	}
 }
@@ -71,7 +72,7 @@ func TestCLIAccountPreviewInstallAndReadOnlyCheck(t *testing.T) {
 func TestCLIDependenciesRequireIndependentConsent(t *testing.T) {
 	mockCLIAccount(t)
 	home := t.TempDir()
-	args := []string{"--home", home, "--modules", "zg"}
+	args := []string{cliHome, home, cliModules, "zg"}
 	if err := runCLIArgs(append(args, cliDryRun)); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestCLIDependenciesRequireIndependentConsent(t *testing.T) {
 
 func TestCLICheckRejectsEmptyModuleSelection(t *testing.T) {
 	mockCLIAccount(t)
-	if err := runCLIArgs([]string{"--home", t.TempDir(), "--modules", ",, ", "--check"}); err == nil {
+	if err := runCLIArgs([]string{cliHome, t.TempDir(), cliModules, ",, ", cliCheck}); err == nil {
 		t.Fatal("empty selection reported ready")
 	}
 }

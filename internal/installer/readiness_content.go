@@ -149,24 +149,31 @@ func installedSkillMatches(entries []any, target string, wanted bool) bool {
 }
 
 func (e *Engine) checkInstalledPanel() error {
-	for _, name := range []string{"codex-panel", "codex-with-panel"} {
-		target, err := e.target("bin", name)
+	get := func(target string) (*Change, error) {
+		if err := readableInstalledFile(target); err != nil {
+			return nil, err
+		}
+		data, err := os.ReadFile(target)
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Stat(target)
+		if err != nil {
+			return nil, err
+		}
+		return &Change{data: data, mode: info.Mode()}, nil
+	}
+	put := func(target string, expected []byte, mode fs.FileMode) error {
+		current, err := get(target)
 		if err != nil {
 			return err
 		}
-		if err := readableInstalledFile(target); err != nil {
-			return err
+		if !bytes.Equal(current.data, expected) || (mode&0111 != 0 && current.mode&0111 == 0) {
+			return fmt.Errorf("integración del panel ausente o modificada: %s", target)
 		}
-		info, err := os.Stat(target)
-		if err != nil || info.Mode().Perm()&0111 == 0 {
-			return fmt.Errorf("lanzador no ejecutable: %s", target)
-		}
+		return nil
 	}
-	for _, dir := range []string{"c", "63"} {
-		target, err := e.target("data", filepath.Join("codex-panel", "terminfo", dir, "codex-panel-direct"))
-		if err == nil && readableInstalledFile(target) == nil {
-			return nil
-		}
-	}
-	return fmt.Errorf("falta terminfo compilado del panel")
+	// Compile only into the helper's disposable directory and compare generated
+	// launchers, terminfo and shell blocks without writing any installed file.
+	return e.preparePanel(&Plan{}, put, get)
 }

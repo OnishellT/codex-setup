@@ -83,11 +83,12 @@ model. These are explicit routing roles because Codex has no configured model
 fallback list.
 
 When Spark quota is explicitly exhausted, retry the unfinished assignment once
-with `gpt-5.6-luna` at `medium` after confirming the worker is terminal. Preserve
+with the configured fallback role (preset: `gpt-5.6-luna` at `medium`) after
+confirming the worker is terminal. Preserve
 partial work, create a fresh Prewalk worktree and manifest, do not use usage
-resets, and reuse Luna for remaining fallback assignments in that run. Use Spark
+resets, and reuse that role for remaining fallback assignments in that run. Use Spark
 again on a new run; never switch for tests, poor results, network errors, or
-generic rate limits. If Luna fails, stop; request reload/new task for cached
+generic rate limits. If the configured fallback fails, stop; request reload/new task for cached
 fallback roles rather than bypassing their fixed model.
 
 Read `{{CODEX_HOME_SHELL}}/integrations/prewalk/settings.json` before planning

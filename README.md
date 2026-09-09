@@ -101,7 +101,8 @@ predeterminado de la cuenta. Los roles de respaldo requieren Luna o una elecció
 explícita disponible. Una elección explícita no disponible se rechaza.
 Esto comprueba acceso al catálogo, no garantiza cuota libre para la siguiente
 generación. En ejecución, la política de fallback distribuida sólo permite
-reintentar con Luna ante agotamiento explícito de Spark, nunca por fallos de
+reintentar con el rol de respaldo configurado (preset Luna/medium) ante
+agotamiento explícito de Spark, nunca por fallos de
 pruebas, red o calidad del resultado. No cambia el modelo del principal ni consume
 un reset. `model_reasoning_summary = "none"` evita el campo incompatible con Spark.
 

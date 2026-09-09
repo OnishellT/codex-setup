@@ -536,6 +536,40 @@ func TestPackagedCustomNativeRoleChoice(t *testing.T) {
 	}
 }
 
+func TestPackagedFallbackChoiceWithoutLuna(t *testing.T) {
+	e := testEngine(t)
+	const available = "gpt-5.6-sol"
+	status := &installer.AccountStatus{DefaultModel: available, Models: []installer.ModelOption{{Model: available, Efforts: []string{"high"}}}}
+	requested := map[string]installer.ModelChoice{
+		"fallback_explorer": {Model: available, Effort: "high"},
+		"fallback_executor": {Model: available, Effort: "high"},
+	}
+	choices, _, err := installer.ResolveAccountChoices(status, requested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.BuildPlanWithModels([]string{"prewalk"}, choices)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Apply(p, nil); err != nil {
+		t.Fatal(err)
+	}
+	for name, choice := range requested {
+		data, err := os.ReadFile(filepath.Join(e.CodexHome, "agents", name+".toml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var role map[string]any
+		if err := toml.Unmarshal(data, &role); err != nil {
+			t.Fatal(err)
+		}
+		if role["model"] != choice.Model || role["model_reasoning_effort"] != choice.Effort {
+			t.Fatalf("explicit fallback lost: %#v", role)
+		}
+	}
+}
+
 func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
 	// Reuse the packaged operations under a fixture ID to isolate merging from
 	// runtime provisioning. TestZGOfficialInstall exercises real pinned runtimes.
@@ -737,4 +771,16 @@ func TestPackagedPanelInstallation(t *testing.T) {
 		t.Fatalf("installed panel tests: %v\n%s", err, out)
 	}
 	t.Logf("installed panel suite:\n%s", out)
+	status := &installer.AccountStatus{Models: []installer.ModelOption{{Model: "gpt-6-astra", Efforts: []string{"medium"}}, {Model: "gpt-5.3-codex-spark", Efforts: []string{"medium"}}}}
+	ready, err := e.CheckReadiness([]string{"panel"}, status)
+	if err != nil || !ready.Ready() {
+		t.Fatalf("installed panel not ready: %+v %v", ready, err)
+	}
+	if err := os.WriteFile(launcher, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	ready, err = e.CheckReadiness([]string{"panel"}, status)
+	if err != nil || ready.Ready() {
+		t.Fatal("modified panel launcher reported ready")
+	}
 }
