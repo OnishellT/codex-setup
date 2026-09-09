@@ -58,7 +58,7 @@ func (e *Engine) installZGNode(stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(stage)
+	defer func() { _ = os.RemoveAll(stage) }()
 	if err := extractZGNode(data, stage, strings.TrimSuffix(asset, ".tar.gz")); err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func downloadZGNode(asset string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("descarga Node devolvió HTTP %s", resp.Status)
 	}
@@ -127,7 +127,7 @@ func extractZGNode(data []byte, stage, archiveRoot string) error {
 	if err != nil {
 		return err
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	var total int64
 	for count := 0; count < 20000; count++ {

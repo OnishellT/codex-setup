@@ -34,7 +34,7 @@ func (e *Engine) installZG(stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(stage)
+	defer func() { _ = os.RemoveAll(stage) }()
 	archive, err := downloadZGPackage()
 	if err != nil {
 		return err
@@ -63,7 +63,7 @@ func downloadZGPackage() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("zg: descarga HTTP %d", resp.StatusCode)
 	}

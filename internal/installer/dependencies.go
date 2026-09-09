@@ -410,20 +410,8 @@ func (e *Engine) InstallDependencies(p *DependencyPlan, stdin io.Reader, stdout,
 		return nil
 	}
 	for _, c := range p.Commands {
-		if !allowlistedDependencyCommand(c) {
-			return errors.New("comando de dependencia no permitido")
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
-		cmd := exec.CommandContext(ctx, c.Path, c.Args...)
-		cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
-		err := cmd.Run()
-		ctxErr := ctx.Err()
-		cancel()
-		if ctxErr != nil {
-			return ctxErr
-		}
-		if err != nil {
-			return fmt.Errorf("falló instalación de dependencias: %w", err)
+		if err := runDependencyCommand(c, stdin, stdout, stderr); err != nil {
+			return err
 		}
 	}
 	if contains(p.Missing, "rtk") {
@@ -442,6 +430,20 @@ func (e *Engine) InstallDependencies(p *DependencyPlan, stdin io.Reader, stdout,
 	}
 	if check.NeedsInstall() {
 		return fmt.Errorf("la instalación terminó, pero aún faltan: %s", strings.Join(check.Missing, ", "))
+	}
+	return nil
+}
+
+func runDependencyCommand(c DependencyCommand, stdin io.Reader, stdout, stderr io.Writer) error {
+	if !allowlistedDependencyCommand(c) {
+		return errors.New("comando de dependencia no permitido")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, c.Path, c.Args...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("falló instalación de dependencias: %w", err)
 	}
 	return nil
 }

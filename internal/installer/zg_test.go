@@ -12,6 +12,7 @@ import (
 )
 
 func TestZGManagedPreflight(t *testing.T) {
+	const packageFile = "package.json"
 	assets := fstest.MapFS{
 		"modules.json":   &fstest.MapFile{Data: []byte(`[{"id":"zg","operations":[{"kind":"merge","source":"config/zg.toml","root":"codex","target":"config.toml"}]}]`)},
 		"config/zg.toml": &fstest.MapFile{Data: []byte("[mcp_servers.zvec_grep]\nenabled = true\n")},
@@ -41,7 +42,7 @@ func TestZGManagedPreflight(t *testing.T) {
 	write(e.managedZGNode(), node, 0755)
 	write(e.managedZGNPM(), "npm", 0600)
 	pkg := zgPackage(e.managedZGPackages())
-	write(filepath.Join(pkg, "package.json"), `{"name":"@zvec/zvec-grep","version":"0.2.1","bin":{"zg":"dist/cli/index.js"}}`, 0600)
+	write(filepath.Join(pkg, packageFile), `{"name":"@zvec/zvec-grep","version":"0.2.1","bin":{"zg":"dist/cli/index.js"}}`, 0600)
 	write(filepath.Join(pkg, zgCLI), "cli", 0600)
 	write(filepath.Join(pkg, "dist/daemon/watch-manager.js"), "watch", 0600)
 	if _, err := e.BuildPlan([]string{"zg"}); err != nil {
@@ -57,14 +58,14 @@ func TestZGManagedPreflight(t *testing.T) {
 		t.Fatal("missing native component accepted")
 	}
 	t.Setenv("ZG_NATIVE", "ready")
-	write(filepath.Join(pkg, "package.json"), `{"name":"@zvec/zvec-grep","version":"0.2.2"}`, 0600)
+	write(filepath.Join(pkg, packageFile), `{"name":"@zvec/zvec-grep","version":"0.2.2"}`, 0600)
 	if e.checkZG() == nil {
 		t.Fatal("wrong version accepted")
 	}
 	if err := e.installZG(io.Discard, io.Discard); err == nil {
 		t.Fatal("invalid existing package overwritten")
 	}
-	data, _ := os.ReadFile(filepath.Join(pkg, "package.json"))
+	data, _ := os.ReadFile(filepath.Join(pkg, packageFile))
 	if !strings.Contains(string(data), "0.2.2") {
 		t.Fatal("existing package changed")
 	}
@@ -123,8 +124,13 @@ func TestZGOfficialInstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertZGConfigPaths(t, plan, e.managedZGNode())
+}
+
+func assertZGConfigPaths(t *testing.T, plan *Plan, node string) {
+	t.Helper()
 	for _, change := range plan.Changes {
-		if strings.HasSuffix(change.Path, "config.toml") && (bytes.Contains(change.data, []byte("{{CODEX_HOME}}")) || !bytes.Contains(change.data, []byte(e.managedZGNode()))) {
+		if strings.HasSuffix(change.Path, "config.toml") && (bytes.Contains(change.data, []byte("{{CODEX_HOME}}")) || !bytes.Contains(change.data, []byte(node))) {
 			t.Fatalf("config does not bind managed runtime: %s", change.data)
 		}
 	}
