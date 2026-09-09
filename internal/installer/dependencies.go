@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -271,33 +272,67 @@ func packageManager() (packageManagerInfo, error) {
 }
 
 func supportedDistroVersion(id, version string) bool {
-	switch strings.ToLower(id) {
-	case "arch":
+	if id == "arch" {
 		return true
+	}
+	parts := strings.Split(version, ".")
+	numbers := make([]int, len(parts))
+	for i, part := range parts {
+		n, err := strconv.Atoi(part)
+		if err != nil || n < 0 {
+			return false
+		}
+		numbers[i] = n
+	}
+	switch strings.ToLower(id) {
 	case "ubuntu":
-		return version >= "24.04"
+		return len(numbers) == 2 && (numbers[0] > 24 || numbers[0] == 24 && numbers[1] >= 4)
 	case "debian":
-		return version >= "12"
+		return numbers[0] >= 12
 	case "fedora":
-		return version >= "40"
+		return numbers[0] >= 40
 	default:
 		return false
 	}
 }
 
 func secureManagerPath(name string) (string, error) {
+	switch name {
+	case "apt-get", "dnf", "pacman", "sudo":
+	default:
+		return "", errors.New("gestor nativo no permitido")
+	}
 	path := filepath.Join("/usr/bin", name)
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
 	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&022 != 0 {
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
 		return "", errors.New("gestor nativo no confiable o ausente")
 	}
-	for dir := filepath.Dir(path); dir != "/"; dir = filepath.Dir(dir) {
-		info, err = os.Stat(dir)
-		if err != nil || info.Mode().Perm()&022 != 0 {
-			return "", errors.New("ruta del gestor no confiable")
+	for _, candidate := range []string{path, resolved} {
+		if err := rootOwnedPath(candidate); err != nil {
+			return "", err
 		}
 	}
 	return path, nil
+}
+
+func rootOwnedPath(path string) error {
+	for current := path; ; current = filepath.Dir(current) {
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat.Uid != 0 || (info.Mode()&os.ModeSymlink == 0 && info.Mode().Perm()&022 != 0) {
+			return errors.New("ruta del gestor no pertenece a root o permite escritura ajena")
+		}
+		if current == filepath.Dir(current) {
+			return nil
+		}
+	}
 }
 func anyToken(tokens, wanted []string) bool {
 	for _, a := range tokens {
@@ -406,7 +441,22 @@ func (e *Engine) InstallDependencies(p *DependencyPlan, stdin io.Reader, stdout,
 }
 
 func allowlistedDependencyCommand(c DependencyCommand) bool {
-	return c.Path != "" && (strings.HasSuffix(c.Path, "/apt-get") || strings.HasSuffix(c.Path, "/dnf") || strings.HasSuffix(c.Path, "/pacman") || strings.HasSuffix(c.Path, "/sudo"))
+	name := filepath.Base(c.Path)
+	if name == "sudo" {
+		path, err := dependencyManagerPath("sudo")
+		if err != nil || path != c.Path || len(c.Args) < 2 {
+			return false
+		}
+		c = DependencyCommand{Path: c.Args[0], Args: c.Args[1:]}
+		name = filepath.Base(c.Path)
+	}
+	switch name {
+	case "apt-get", "dnf", "pacman":
+		path, err := dependencyManagerPath(name)
+		return err == nil && path == c.Path && len(c.Args) != 0
+	default:
+		return false
+	}
 }
 func contains(xs []string, want string) bool {
 	for _, x := range xs {

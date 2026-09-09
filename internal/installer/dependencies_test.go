@@ -124,8 +124,6 @@ func fakePackageManagers(t *testing.T) string {
 	t.Cleanup(func() { dependencyManagerPath = old })
 	dir := t.TempDir()
 	t.Setenv("PATH", dir)
-	oldManager := dependencyManagerPath
-	t.Cleanup(func() { dependencyManagerPath = oldManager })
 	for _, name := range []string{"apt-get", "pacman", "sudo"} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0755); err != nil {
 			t.Fatal(err)
@@ -188,7 +186,6 @@ func runFakeDependencyCase(t *testing.T, success, creates bool) {
 	if err := os.WriteFile(filepath.Join(dir, "sudo"), []byte("#!/bin/sh\nexec \"$@\"\n"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	dependencyManagerPath = func(name string) (string, error) { return filepath.Join(dir, name), nil }
 	e := &Engine{Home: t.TempDir(), Modules: []Module{{ID: "context-handoff"}}}
 	p, err := e.PlanDependencies([]string{"context-handoff"})
 	if err != nil {
@@ -200,5 +197,73 @@ func runFakeDependencyCase(t *testing.T, success, creates bool) {
 	}
 	if (!success || !creates) && err == nil {
 		t.Fatal("expected installation failure")
+	}
+}
+
+func TestDependencyCommandValidatesInnerManager(t *testing.T) {
+	dir := fakePackageManagers(t)
+	for _, tc := range []struct {
+		path    string
+		args    []string
+		allowed bool
+	}{
+		{filepath.Join(dir, "sudo"), []string{filepath.Join(dir, "apt-get"), "update"}, true},
+		{filepath.Join(dir, "sudo"), []string{"/writable/apt-get", "update"}, false},
+		{filepath.Join(dir, "sudo"), []string{filepath.Join(dir, "sudo"), "sh"}, false},
+		{"/writable/sudo", []string{filepath.Join(dir, "apt-get"), "update"}, false},
+		{filepath.Join(dir, "apt-get"), []string{"update"}, true},
+	} {
+		if got := allowlistedDependencyCommand(DependencyCommand{Path: tc.path, Args: tc.args}); got != tc.allowed {
+			t.Errorf("%+v allowed=%v", tc, got)
+		}
+	}
+}
+
+func TestSecureManagerIgnoresPATH(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "apt-get"), []byte("#!/bin/sh\nexit 99\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	path, err := secureManagerPath("apt-get")
+	if err == nil && path != "/usr/bin/apt-get" {
+		t.Fatalf("accepted PATH manager %q", path)
+	}
+	if err := rootOwnedPath(dir); err == nil {
+		t.Fatal("user-writable path trusted")
+	}
+	if _, err := secureManagerPath("../bin/sh"); err == nil {
+		t.Fatal("accepted arbitrary executable")
+	}
+}
+
+func TestSupportedDistroVersions(t *testing.T) {
+	for _, tc := range []struct {
+		id, version string
+		ok          bool
+	}{
+		{"ubuntu", "22.04", false}, {"ubuntu", "24.04", true}, {"ubuntu", "24.03", false},
+		{"debian", "9", false}, {"debian", "12", true}, {"debian", "100", true},
+		{"fedora", "39", false}, {"fedora", "40", true}, {"arch", "", true},
+		{"ubuntu", "rolling", false}, {"debian", "", false}, {"linuxmint", "24.04", false},
+	} {
+		if got := supportedDistroVersion(tc.id, tc.version); got != tc.ok {
+			t.Errorf("%+v got %v", tc, got)
+		}
+	}
+}
+
+func TestBasePythonDoesNotRequireCurses(t *testing.T) {
+	dir := t.TempDir()
+	script := "#!/bin/sh\ncase \"$2\" in *curses*) exit 1;; *) exit 0;; esac\n"
+	if err := os.WriteFile(filepath.Join(dir, "python3"), []byte(script), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	if !dependencySatisfied(dependencyRequirement{depPython, "python3", "3.11"}) {
+		t.Fatal("base Python required panel modules")
+	}
+	if dependencySatisfied(dependencyRequirement{depPythonModules, "python3", "3.11"}) {
+		t.Fatal("panel Python accepted missing curses")
 	}
 }

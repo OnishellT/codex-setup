@@ -87,7 +87,7 @@ func (e *Engine) mergeHooks(p *Plan, moduleID, source string, get func(string) (
 	}
 	c.data = append(encoded, '\n')
 	p.Warnings = append(p.Warnings, "Hooks de "+moduleID+" añadidos a "+filename+". Revísalos y confíalos manualmente con /hooks; el instalador no evita la confirmación de confianza.")
-	p.Warnings = append(p.Warnings, hookPrerequisiteWarnings(moduleID)...)
+	p.Warnings = append(p.Warnings, e.hookPrerequisiteWarnings(moduleID)...)
 	return nil
 }
 
@@ -245,20 +245,15 @@ func appendHookGroups(existing, addition []any) []any {
 	return result
 }
 
-func hookPrerequisiteWarnings(moduleID string) []string {
+func (e *Engine) hookPrerequisiteWarnings(moduleID string) []string {
 	warnings := []string{}
 	if _, err := exec.LookPath("python3"); err != nil {
 		warnings = append(warnings, moduleID+": falta python3 en PATH; el hook quedará instalado pero no podrá ejecutarse.")
 	}
 	switch moduleID {
 	case "rtk":
-		path, err := exec.LookPath("rtk")
-		if err != nil {
-			return append(warnings, "rtk: falta RTK >= 0.23 en PATH; el adaptador dejará pasar los comandos sin cambios.")
-		}
-		out, err := run(2*time.Second, path, "--version")
-		if err != nil || !atLeastVersion(out, 0, 23) {
-			warnings = append(warnings, "rtk: se requiere RTK >= 0.23 (no se pudo verificar la versión instalada).")
+		if !e.rtkAvailable() {
+			warnings = append(warnings, "rtk: falta el binario gestionado en "+e.managedRTK()+"; confirma la instalación de dependencias. El adaptador dejará pasar los comandos sin cambios.")
 		}
 	case "ponytail":
 		path, err := exec.LookPath("node")
