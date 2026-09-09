@@ -6,11 +6,38 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 )
+
+func TestQltyOfficialInstall(t *testing.T) {
+	if os.Getenv("CODEX_SETUP_QLTY_NETWORK_TEST") != "1" {
+		t.Skip("set CODEX_SETUP_QLTY_NETWORK_TEST=1")
+	}
+	e := qltyTestEngine(t)
+	p, err := e.PlanDependencies([]string{"prewalk"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Commands) != 0 {
+		t.Skip("install native prerequisites separately; this test never runs a package manager")
+	}
+	if err := e.InstallDependencies(p, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !e.qltyAvailable() {
+		t.Fatal("installed Qlty failed integrity check")
+	}
+	if out, err := exec.Command(e.managedQlty(), "--version").CombinedOutput(); err != nil || !strings.Contains(string(out), qltyVersion) {
+		t.Fatalf("Qlty --version: %s %v", out, err)
+	}
+	if _, err := e.BuildPlan([]string{"prewalk"}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func qltyTestEngine(t *testing.T) *Engine {
 	t.Helper()

@@ -202,11 +202,11 @@ anteriores e instala la skill automática `$CODEX_HOME/skills/prewalk/SKILL.md`,
 registrada como enabled, además de los roles de exploración, ejecución/fallback y
 `agents/engineering_reviewer.toml`,
 helpers de Git/Qlty y hooks de revisión. Requiere Python 3.11+, Git, `tar` con
-soporte xz y conexión en la primera instalación: descarga Qlty 0.644.0 desde su
-release oficial, verifica
+soporte xz y conexión en la primera instalación: tras el consentimiento de
+dependencias descarga Qlty 0.644.0 desde su release oficial, verifica
 su SHA-256 y lo instala en `$CODEX_HOME/integrations/prewalk/bin`. En Linux usa
 el binario musl estático, compatible también con sistemas glibc. No ejecuta
-scripts remotos. Qlty descarga los analizadores necesarios al preparar o analizar
+scripts remotos; la previsualización no descarga Qlty. Qlty descarga los analizadores necesarios al preparar o analizar
 un proyecto. Qlty usa BSL/Fair Source: revisa su licencia si ofrecerás este setup
 como servicio a terceros. No necesita
 panel, Node ni plugins de Codex. El módulo `agents`, dependencia de

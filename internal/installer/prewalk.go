@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -227,6 +228,9 @@ func (e *Engine) prewalkConfig(p *Plan, target string, source []byte, get func(s
 	c.data, err = toml.Marshal(current)
 	if err != nil {
 		return err
+	}
+	if info, err := os.Lstat(root); err == nil && info.IsDir() && info.Mode().Perm() == 0700 {
+		return nil
 	}
 	for _, action := range p.actions {
 		if action.Kind == "ensure-private-dir" && action.Path == root {

@@ -30,6 +30,17 @@ func testEngine(t *testing.T) *installer.Engine {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Packaging tests exercise configuration only. Managed Qlty bootstrap is
+	// covered by installer tests and the opt-in official installation check.
+	for i := range e.Modules {
+		var operations []installer.Operation
+		for _, op := range e.Modules[i].Operations {
+			if op.Kind != "qlty-install" {
+				operations = append(operations, op)
+			}
+		}
+		e.Modules[i].Operations = operations
+	}
 	return e
 }
 
@@ -365,14 +376,6 @@ func TestPackagedPrewalkDefaultsToNativeCodex(t *testing.T) {
 	if err = json.Unmarshal(settingsData, &prewalkSettings); err != nil || prewalkSettings["max_workers"] != float64(4) {
 		t.Fatalf("invalid Prewalk worker limit: %v, %#v", err, prewalkSettings)
 	}
-	qltyPath := filepath.Join(e.CodexHome, "integrations", "prewalk", "bin", "qlty")
-	qltyInfo, err := os.Stat(qltyPath)
-	if err != nil || qltyInfo.Mode().Perm() != 0755 {
-		t.Fatalf("managed Qlty missing or not executable: %v, %v", qltyInfo, err)
-	}
-	if out, err := exec.Command(qltyPath, "--version").CombinedOutput(); err != nil || !strings.Contains(string(out), "0.644.0") {
-		t.Fatalf("managed Qlty version mismatch: %v\n%s", err, out)
-	}
 	// Exercise the installed (embedded) helper, not just the source tree.
 	project := filepath.Join(t.TempDir(), "new project")
 	if err := os.Mkdir(project, 0755); err != nil {
@@ -391,6 +394,29 @@ func TestPackagedPrewalkDefaultsToNativeCodex(t *testing.T) {
 	if err != nil || len(p.Changes) != 0 {
 		t.Fatalf("not idempotent: %v", err)
 	}
+	result, err := e.Apply(p, nil)
+	if err != nil || result.Changed != 0 || result.BackupDir != "" {
+		t.Fatalf("unchanged reinstall created a backup: %+v %v", result, err)
+	}
+}
+
+func TestPayloadIncludesManagedQlty(t *testing.T) {
+	data, err := fs.ReadFile(assets, "payload/modules.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var modules []installer.Module
+	if err := json.Unmarshal(data, &modules); err != nil {
+		t.Fatal(err)
+	}
+	for _, module := range modules {
+		for _, op := range module.Operations {
+			if module.ID == "prewalk" && op.Kind == "qlty-install" && op.Root == "codex" && op.Target == "integrations/prewalk/bin/qlty" {
+				return
+			}
+		}
+	}
+	t.Fatal("Prewalk must require the managed Qlty runtime")
 }
 
 func TestPackagedFallbackExecutorMigratesGeneratedInstructions(t *testing.T) {
