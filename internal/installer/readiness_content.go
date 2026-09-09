@@ -62,7 +62,7 @@ func (e *Engine) checkInstalledConfig(op Operation, target string) error {
 			return fmt.Errorf("configuración nativa ChatGPT/multiagente deshabilitada")
 		}
 	}
-	if op.Source != "config/zg.toml" {
+	if op.Source == "" {
 		return nil
 	}
 	data, err := fs.ReadFile(e.assets, op.Source)
@@ -74,15 +74,37 @@ func (e *Engine) checkInstalledConfig(op Operation, target string) error {
 		return err
 	}
 	expandConfigPaths(expected, e.CodexHome)
-	servers, _ := config["mcp_servers"].(map[string]any)
-	wanted := expected["mcp_servers"].(map[string]any)["zvec_grep"].(map[string]any)
-	actual, _ := servers["zvec_grep"].(map[string]any)
-	for key, value := range wanted {
-		if !reflect.DeepEqual(actual[key], value) {
-			return fmt.Errorf("configuración zg ausente o modificada: %s", key)
+	// Available account choices supersede packaged presets; hooks-state is
+	// applied after base.toml and is verified separately against the app-server.
+	delete(expected, "model")
+	delete(expected, "model_reasoning_effort")
+	if agents, ok := expected["agents"].(map[string]any); ok {
+		delete(agents, "default_subagent_model")
+		delete(agents, "default_subagent_reasoning_effort")
+	}
+	if op.Source == "config/base.toml" {
+		if features, ok := expected["features"].(map[string]any); ok {
+			delete(features, "hooks")
 		}
 	}
+	if !containsManagedConfig(config, expected) {
+		return fmt.Errorf("configuración gestionada ausente o modificada: %s", target)
+	}
 	return nil
+}
+
+func containsManagedConfig(actual, expected map[string]any) bool {
+	for key, value := range expected {
+		if wanted, ok := value.(map[string]any); ok {
+			current, ok := actual[key].(map[string]any)
+			if !ok || !containsManagedConfig(current, wanted) {
+				return false
+			}
+		} else if !reflect.DeepEqual(actual[key], value) {
+			return false
+		}
+	}
+	return true
 }
 
 func (e *Engine) checkInstalledSkills(op Operation) error {

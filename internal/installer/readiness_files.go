@@ -34,7 +34,7 @@ func readableInstalledFile(path string) error {
 	return err
 }
 
-func (e *Engine) checkInstalledOperation(op Operation) error {
+func (e *Engine) checkInstalledOperation(moduleID string, op Operation) error {
 	if op.Kind == "panel" {
 		return e.checkInstalledPanel()
 	}
@@ -55,7 +55,15 @@ func (e *Engine) checkInstalledOperation(op Operation) error {
 		return checkInstalledQlty(target)
 	case "merge", "native-config":
 		return e.checkInstalledConfig(op, target)
-	case "copy-if-missing", "agent-instructions", "prewalk-settings", "append", "developer-instructions", "prewalk-config", "hooks-state":
+	case "append", "developer-instructions":
+		return e.checkInstalledInstructions(moduleID, op, target)
+	case "agent-instructions":
+		return checkInstalledRole(target)
+	case "prewalk-settings":
+		return checkInstalledPrewalkSettings(target)
+	case "prewalk-config":
+		return e.checkInstalledPrewalkConfig(op, target)
+	case "copy-if-missing", "hooks-state":
 		return readableInstalledFile(target)
 	}
 	return nil
@@ -85,7 +93,7 @@ func (e *Engine) checkInstalledFiles(modules []Module) []string {
 	var pending []string
 	for _, m := range modules {
 		for _, op := range m.Operations {
-			if err := e.checkInstalledOperation(op); err != nil {
+			if err := e.checkInstalledOperation(m.ID, op); err != nil {
 				pending = append(pending, fmt.Sprintf("%s: %v", m.ID, err))
 			}
 		}
