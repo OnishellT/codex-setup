@@ -59,6 +59,17 @@ func mockNodeDownload(t *testing.T, data []byte, pin bool) {
 	})}
 	if pin {
 		zgNodeHashes[runtime.GOARCH] = sha256Hex(data)
+		stage := t.TempDir()
+		if err := extractZGNode(data, stage, strings.TrimSuffix(zgNodeAssets[runtime.GOARCH], ".tar.gz")); err != nil {
+			t.Fatal(err)
+		}
+		oldRuntime := zgNodeRuntimeHashes[runtime.GOARCH]
+		digest, err := directorySHA256(stage)
+		if err != nil {
+			t.Fatal(err)
+		}
+		zgNodeRuntimeHashes[runtime.GOARCH] = digest
+		t.Cleanup(func() { zgNodeRuntimeHashes[runtime.GOARCH] = oldRuntime })
 	}
 }
 

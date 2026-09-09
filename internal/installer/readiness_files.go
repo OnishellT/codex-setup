@@ -35,15 +35,27 @@ func readableInstalledFile(path string) error {
 }
 
 func (e *Engine) checkInstalledOperation(op Operation) error {
+	if op.Kind == "panel" {
+		return e.checkInstalledPanel()
+	}
 	if op.Kind == "tree" {
 		return e.checkInstalledTree(op)
 	}
+	if op.Kind == "skills-state" {
+		return e.checkInstalledSkills(op)
+	}
+	target, err := e.target(op.Root, op.Target)
+	if err != nil {
+		return err
+	}
 	switch op.Kind {
-	case "copy", "copy-if-missing", "template-copy", "agent-instructions", "qlty-install", "prewalk-settings", "merge", "append", "developer-instructions", "native-config", "prewalk-config", "hooks-state":
-		target, err := e.target(op.Root, op.Target)
-		if err != nil {
-			return err
-		}
+	case "copy", "template-copy":
+		return e.checkInstalledPayload(op.Source, target, op.Kind == "template-copy", false)
+	case "qlty-install":
+		return checkInstalledQlty(target)
+	case "merge", "native-config":
+		return e.checkInstalledConfig(op, target)
+	case "copy-if-missing", "agent-instructions", "prewalk-settings", "append", "developer-instructions", "prewalk-config", "hooks-state":
 		return readableInstalledFile(target)
 	}
 	return nil
@@ -65,7 +77,7 @@ func (e *Engine) checkInstalledTree(op Operation) error {
 		if err != nil {
 			return err
 		}
-		return readableInstalledFile(target)
+		return e.checkInstalledPayload(source, target, false, true)
 	})
 }
 

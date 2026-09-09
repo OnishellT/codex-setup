@@ -1,5 +1,6 @@
 """Adapter contract tests; never contact an LLM or touch the real Codex home."""
 
+import hashlib
 import importlib.util
 import io
 import json
@@ -40,6 +41,9 @@ class RTKTests(unittest.TestCase):
         source = patch.object(rtk, "__file__", str(root / "hook.py"))
         source.start()
         self.addCleanup(source.stop)
+        pins = patch.dict(rtk.RTK_HASHES, {rtk.platform.machine(): hashlib.sha256(self.binary.read_bytes()).hexdigest()})
+        pins.start()
+        self.addCleanup(pins.stop)
 
     def event(self, command="git status --short"):
         return {"hook_event_name": "PreToolUse", "tool_name": "Bash",
@@ -93,7 +97,8 @@ class RTKTests(unittest.TestCase):
             binary.parent.mkdir()
             binary.write_text("#!/bin/sh\nprintf '%s\\n' 'rtk git status'\n")
             binary.chmod(0o755)
-            with patch.dict(os.environ, {"PATH": "/nonexistent", "CODEX_HOME": ""}, clear=False), patch.object(rtk, "__file__", str(hook)):
+            with patch.dict(os.environ, {"PATH": "/nonexistent", "CODEX_HOME": ""}, clear=False), patch.object(rtk, "__file__", str(hook)), \
+                    patch.dict(rtk.RTK_HASHES, {rtk.platform.machine(): hashlib.sha256(binary.read_bytes()).hexdigest()}):
                 output = rtk.rewrite(self.event())
             self.assertEqual(output["hookSpecificOutput"]["updatedInput"]["command"], shlex.quote(str(binary)) + " git status")
 
@@ -104,7 +109,8 @@ class RTKTests(unittest.TestCase):
             managed.parent.mkdir(parents=True)
             managed.write_text("#!/bin/sh\nprintf '%s\\n' 'unexpected output'\n")
             managed.chmod(0o755)
-            with patch.dict(os.environ, {"PATH": "/nonexistent", "CODEX_HOME": ""}, clear=False), patch.object(rtk, "__file__", str(root / "integrations" / "rtk" / "hook.py")):
+            with patch.dict(os.environ, {"PATH": "/nonexistent", "CODEX_HOME": ""}, clear=False), patch.object(rtk, "__file__", str(root / "integrations" / "rtk" / "hook.py")), \
+                    patch.dict(rtk.RTK_HASHES, {rtk.platform.machine(): hashlib.sha256(managed.read_bytes()).hexdigest()}):
                 self.assertIsNone(rtk.rewrite(self.event()))
 
     def test_entrypoint_timeout_and_missing_rtk(self):
@@ -140,6 +146,12 @@ class RTKTests(unittest.TestCase):
         with patch.object(rtk, "__file__", str(self.binary.parent / "missing" / "hook.py")), \
                 patch.dict(os.environ, {"PATH": str(self.binary.parent)}), \
                 patch.object(rtk.subprocess, "run") as run:
+            self.assertIsNone(rtk.rewrite(self.event()))
+            run.assert_not_called()
+
+    def test_modified_private_binary_is_never_executed(self):
+        self.binary.write_text("#!/bin/sh\necho 'rtk malicious'\n")
+        with patch.object(rtk.subprocess, "run") as run:
             self.assertIsNone(rtk.rewrite(self.event()))
             run.assert_not_called()
 

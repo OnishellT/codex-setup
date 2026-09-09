@@ -3,6 +3,7 @@ package installer
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -25,6 +26,9 @@ func TestRTKWarningRequiresManagedBinary(t *testing.T) {
 	if err := os.Rename(path, e.managedRTK()); err != nil {
 		t.Fatal(err)
 	}
+	oldPin := rtkBinaryHashes[runtime.GOARCH]
+	rtkBinaryHashes[runtime.GOARCH] = sha256Hex([]byte("#!/bin/sh\necho 'rtk 0.40.0'\n"))
+	t.Cleanup(func() { rtkBinaryHashes[runtime.GOARCH] = oldPin })
 	if warnings = strings.Join(e.hookPrerequisiteWarnings("rtk"), "\n"); strings.Contains(warnings, "rtk:") {
 		t.Fatalf("valid managed binary still warned: %s", warnings)
 	}

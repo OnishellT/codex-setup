@@ -2,10 +2,12 @@ package installer
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -45,6 +47,18 @@ func TestZGManagedPreflight(t *testing.T) {
 	write(filepath.Join(pkg, packageFile), `{"name":"@zvec/zvec-grep","version":"0.2.1","bin":{"zg":"dist/cli/index.js"}}`, 0600)
 	write(filepath.Join(pkg, zgCLI), "cli", 0600)
 	write(filepath.Join(pkg, "dist/daemon/watch-manager.js"), "watch", 0600)
+	oldNode, oldPackage := zgNodeRuntimeHashes[runtime.GOARCH], zgPackageRuntimeHashes[runtime.GOARCH]
+	t.Cleanup(func() {
+		zgNodeRuntimeHashes[runtime.GOARCH], zgPackageRuntimeHashes[runtime.GOARCH] = oldNode, oldPackage
+	})
+	zgNodeRuntimeHashes[runtime.GOARCH], err = directorySHA256(filepath.Dir(filepath.Dir(e.managedZGNode())))
+	if err != nil {
+		t.Fatal(err)
+	}
+	zgPackageRuntimeHashes[runtime.GOARCH], err = directorySHA256(filepath.Join(e.managedZGPackages(), "node_modules"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := e.BuildPlan([]string{"zg"}); err != nil {
 		t.Fatal(err)
 	}
@@ -71,10 +85,25 @@ func TestZGManagedPreflight(t *testing.T) {
 	}
 }
 
-func TestZGPackageRejectsBadIntegrity(t *testing.T) {
-	mockNodeDownload(t, []byte("foreign"), false)
-	if _, err := downloadZGPackage(); err == nil {
-		t.Fatal("unverified tarball accepted")
+func TestZGPackageLockPinsIntegrity(t *testing.T) {
+	data, err := os.ReadFile("../../payload/integrations/zg/package-lock.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lock struct {
+		Packages map[string]struct{ Version, Integrity, Resolved string }
+	}
+	if err := json.Unmarshal(data, &lock); err != nil {
+		t.Fatal(err)
+	}
+	root := lock.Packages["node_modules/@zvec/zvec-grep"]
+	if root.Version != zgPackageVersion || root.Integrity != "sha512-"+zgTarballHash {
+		t.Fatal("zg lock does not pin the verified release")
+	}
+	for name, pkg := range lock.Packages {
+		if name != "" && (pkg.Integrity == "" || !strings.HasPrefix(pkg.Resolved, "https://registry.npmjs.org/")) {
+			t.Fatalf("unverified dependency: %s", name)
+		}
 	}
 }
 

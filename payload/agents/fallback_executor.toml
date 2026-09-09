@@ -1,5 +1,5 @@
 name = "fallback_executor"
-description = "Ejecuta un plan aprobado sólo cuando el modelo del prewalk_executor no está disponible."
+description = "Ejecuta un plan aprobado como respaldo tras agotamiento explícito de cuota Spark."
 model = "gpt-5.6-luna"
 model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"

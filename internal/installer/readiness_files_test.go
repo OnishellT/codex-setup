@@ -1,11 +1,54 @@
 package installer
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"testing/fstest"
 )
+
+func TestReadinessRejectsModifiedPayload(t *testing.T) {
+	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{"script.sh": &fstest.MapFile{Data: []byte("#!/bin/sh\nexit 0\n")}}}
+	path := filepath.Join(e.CodexHome, "script.sh")
+	for _, tc := range []struct {
+		data  string
+		mode  os.FileMode
+		valid bool
+	}{
+		{"#!/bin/sh\nexit 0\n", 0700, true},
+		{"", 0700, false},
+		{"#!/bin/sh\nexit 1\n", 0700, false},
+		{"#!/bin/sh\nexit 0\n", 0600, false},
+	} {
+		if err := os.WriteFile(path, []byte(tc.data), tc.mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(path, tc.mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.checkInstalledPayload("script.sh", path, false, true); (err == nil) != tc.valid {
+			t.Fatalf("payload %q mode %o: %v", tc.data, tc.mode, err)
+		}
+	}
+	if checkInstalledQlty(path) == nil {
+		t.Fatal("unverified Qlty accepted")
+	}
+}
+
+func TestReadinessChecksSkillState(t *testing.T) {
+	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{"skills/example/SKILL.md": &fstest.MapFile{Data: []byte("skill")}}}
+	op := Operation{Kind: "skills-state", Source: "skills", Root: "codex", Target: "skills", Enabled: true}
+	for _, enabled := range []bool{true, false} {
+		data := fmt.Sprintf("[[skills.config]]\npath=%q\nenabled=%t\n", filepath.Join(e.CodexHome, "skills/example/SKILL.md"), enabled)
+		if err := os.WriteFile(filepath.Join(e.CodexHome, "config.toml"), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.checkInstalledOperation(op); (err == nil) != enabled {
+			t.Fatalf("enabled=%t: %v", enabled, err)
+		}
+	}
+}
 
 func TestReadinessFilesRequiresEveryRegularChild(t *testing.T) {
 	e := &Engine{CodexHome: t.TempDir(), assets: fstest.MapFS{"source/child": &fstest.MapFile{Data: []byte("payload")}}}
@@ -26,7 +69,7 @@ func TestReadinessFilesRequiresEveryRegularChild(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("installed"), 0600); err != nil {
+	if err := os.WriteFile(path, []byte("payload"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.checkInstalledOperation(op); err != nil {
@@ -55,7 +98,7 @@ func TestReadinessUsesInstalledAccountChoices(t *testing.T) {
 	path := filepath.Join(e.CodexHome, configName)
 	write := func(generic string) {
 		t.Helper()
-		data := "model='account-specific'\nmodel_reasoning_effort='high'\n[agents]\ndefault_subagent_model='" + generic + "'\ndefault_subagent_reasoning_effort='high'\n"
+		data := "model='account-specific'\nmodel_reasoning_effort='high'\nforced_login_method='chatgpt'\n[features]\nmulti_agent=true\nmulti_agent_v2=true\n[agents]\ndefault_subagent_model='" + generic + "'\ndefault_subagent_reasoning_effort='high'\n"
 		if err := os.WriteFile(path, []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Rewrite Codex Bash calls through RTK; never execute the supplied command here."""
 
+import hashlib
 import json
 import os
+import platform
 import re
 import shlex
 import subprocess
@@ -11,6 +13,10 @@ from pathlib import Path
 
 MAX_INPUT_BYTES = 2 * 1024 * 1024
 REWRITE_TIMEOUT = 2
+RTK_HASHES = {
+    "x86_64": "b04ea330c46265634f214f14934acb89e7cabb2b1562c74d9a68f497aa41ad23",
+    "aarch64": "43b0d54259fb2ba2537bd6ad9bf5ed3c01db497674ac19b5b865a05b34b7b861",
+}
 
 
 def rewrite(event):
@@ -61,11 +67,15 @@ def rewrite(event):
 
 
 def rtk_command():
-    """Use only the private binary next to this installed hook."""
+    """Use only the pinned private binary next to this installed hook."""
     managed = Path(__file__).resolve().parent / "bin" / "rtk"
-    if managed.is_file() and not managed.is_symlink() and os.access(managed, os.X_OK):
-        return str(managed)
-    return None
+    if not managed.is_file() or managed.is_symlink() or not os.access(managed, os.X_OK):
+        return None
+    if managed.stat().st_size > 16 * 1024 * 1024:
+        return None
+    with managed.open("rb") as binary:
+        digest = hashlib.file_digest(binary, "sha256").hexdigest()
+    return str(managed) if digest == RTK_HASHES.get(platform.machine()) else None
 
 
 def main():

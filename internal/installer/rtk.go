@@ -30,11 +30,23 @@ var rtkHashes = map[string]string{
 	"arm64": "1d0087ad62a182c0833c2251ac678b5e05356418d91aa57305ac51a126c9b102",
 }
 
+var rtkBinaryHashes = map[string]string{
+	"amd64": "b04ea330c46265634f214f14934acb89e7cabb2b1562c74d9a68f497aa41ad23",
+	"arm64": "43b0d54259fb2ba2537bd6ad9bf5ed3c01db497674ac19b5b865a05b34b7b861",
+}
+
 func (e *Engine) managedRTK() string {
 	return filepath.Join(e.CodexHome, "integrations", "rtk", "bin", "rtk")
 }
 
 func validRTK(path string) bool {
+	if err := checkPath(path); err != nil {
+		return false
+	}
+	digest, err := fileSHA256(path, 16<<20)
+	if err != nil || digest != rtkBinaryHashes[runtime.GOARCH] {
+		return false
+	}
 	out, err := run(3*time.Second, path, "--version")
 	return err == nil && atLeastVersion(out, 0, 23)
 }
@@ -72,7 +84,7 @@ func (e *Engine) installRTK(stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmpName)
+	defer func() { _ = os.Remove(tmpName) }()
 	if !validRTK(tmpName) {
 		return errors.New("binario RTK descargado no supera la verificación de versión")
 	}

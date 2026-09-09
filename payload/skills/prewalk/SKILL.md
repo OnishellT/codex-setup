@@ -76,8 +76,8 @@ Use the configured `explorer` for normal read-only discovery and bulk lookups.
 Reserve `fallback_explorer` for exhausted Spark quota as described below;
 choose `critical_explorer` for ambiguous, security-sensitive
 or high-impact investigation. For implementation, use `prewalk_executor`; retry
-with `fallback_executor` only when the primary executor's model is
-unavailable before useful work begins. A failed implementation, test failure or
+with `fallback_executor` only after explicit Spark quota exhaustion as described
+below. A failed implementation, test failure or
 weak result must be corrected or replanned, not silently retried on a different
 model. These are explicit routing roles because Codex has no configured model
 fallback list.

@@ -22,6 +22,10 @@ const zgNPMRelative = "lib/node_modules/npm/bin/npm-cli.js"
 var zgNodeClient = &http.Client{Timeout: 2 * time.Minute}
 var zgNodeAssets = map[string]string{"amd64": "node-v22.23.2-linux-x64.tar.gz", "arm64": "node-v22.23.2-linux-arm64.tar.gz"}
 var zgNodeHashes = map[string]string{"amd64": "b294a556e639d64338823920e5866c21c02741742d2e1529ee1a225c1ec9252a", "arm64": "013b59cfd2819703a6f4a14ab891fc46fc2a4e3f5bcd92de3fb4929b43e35b30"}
+var zgNodeRuntimeHashes = map[string]string{
+	"amd64": "6ef51a48078404cf4fa385c89af4e1abd7bcc5f81cf3126bdd1a6765f8f963c6",
+	"arm64": "fa932a35d6219faac41ccc7ccda4460b1b3d2a4c295eba1b48dfedcd949d1900",
+}
 
 func (e *Engine) managedZGNode() string {
 	return filepath.Join(e.CodexHome, "integrations", "zg", "node-v"+zgNodeVersion, "bin", "node")
@@ -100,6 +104,10 @@ func downloadZGNode(asset string) ([]byte, error) {
 }
 
 func validateZGNode(root string) error {
+	digest, err := directorySHA256(root)
+	if err != nil || digest != zgNodeRuntimeHashes[runtime.GOARCH] {
+		return fmt.Errorf("runtime Node/npm ausente o modificado: %s", root)
+	}
 	node := filepath.Join(root, "bin", "node")
 	npm := filepath.Join(root, zgNPMRelative)
 	for _, path := range []string{node, npm} {

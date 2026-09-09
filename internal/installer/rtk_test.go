@@ -38,6 +38,9 @@ func TestInstallRTKPreservesValidManagedBinaryWithoutDownload(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := []byte("#!/bin/sh\necho 'rtk 0.40.0'\n")
+	oldPin := rtkBinaryHashes[runtime.GOARCH]
+	rtkBinaryHashes[runtime.GOARCH] = sha256Hex(content)
+	t.Cleanup(func() { rtkBinaryHashes[runtime.GOARCH] = oldPin })
 	if err := os.WriteFile(target, content, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -53,6 +56,23 @@ func TestInstallRTKPreservesValidManagedBinaryWithoutDownload(t *testing.T) {
 	}
 	if string(got) != string(content) {
 		t.Fatalf("managed binary changed: %q", got)
+	}
+}
+
+func TestRTKUnknownPrivateExecutableIsNotExecuted(t *testing.T) {
+	e := &Engine{CodexHome: t.TempDir()}
+	marker := filepath.Join(e.CodexHome, "executed")
+	if err := os.MkdirAll(filepath.Dir(e.managedRTK()), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(e.managedRTK(), []byte("#!/bin/sh\ntouch '"+marker+"'\necho rtk 0.40.0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if e.rtkAvailable() {
+		t.Fatal("unknown private binary accepted")
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("unknown private binary executed during probe")
 	}
 }
 

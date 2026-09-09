@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -13,6 +14,11 @@ import (
 const zgHelper = "integrations/zg/pr86-watch-manager.mjs"
 const zgPackageVersion = "0.2.1"
 const zgCLI = "dist/cli/index.js"
+
+var zgPackageRuntimeHashes = map[string]string{
+	"amd64": "c3d3c1bd1bc89648a03c33b30d7dec1a34035b8ed7695c85b6053eda4a0efc17",
+	"arm64": "89157c5430286280e573df82a3940c315fb873503a8b062c4a59178cfeb15d2f",
+}
 
 func (e *Engine) managedZGPackages() string {
 	return filepath.Join(e.CodexHome, "integrations", "zg", "packages-v"+zgPackageVersion)
@@ -30,6 +36,10 @@ func (e *Engine) checkZG() error {
 }
 
 func (e *Engine) validateZGPackage(prefix string) error {
+	digest, err := directorySHA256(filepath.Join(prefix, "node_modules"))
+	if err != nil || digest != zgPackageRuntimeHashes[runtime.GOARCH] {
+		return fmt.Errorf("runtime zg ausente o modificado: %s", prefix)
+	}
 	pkg := zgPackage(prefix)
 	for _, filename := range []string{"package.json", zgCLI, "dist/daemon/watch-manager.js"} {
 		path := filepath.Join(pkg, filename)

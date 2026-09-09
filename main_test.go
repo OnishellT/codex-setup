@@ -511,8 +511,9 @@ func TestPackagedCustomNativeRoleChoice(t *testing.T) {
 }
 
 func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
-	// The packaged-install test isolates dependency checks; checkZG tests and
-	// the installed Node helper tests below exercise the actual validation.
+	// Reuse the packaged operations under a fixture ID to isolate merging from
+	// runtime provisioning. TestZGOfficialInstall exercises real pinned runtimes.
+	const fixtureID = "zg-fixture"
 	realNode, err := exec.LookPath("node")
 	if err != nil {
 		t.Fatal(err)
@@ -536,9 +537,10 @@ func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
 		}
 	}
 	var zg installer.Module
-	for _, module := range e.Modules {
+	for i, module := range e.Modules {
 		if module.ID == "zg" {
 			zg = module
+			e.Modules[i].ID = fixtureID
 			break
 		}
 	}
@@ -558,7 +560,7 @@ func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	p, err := e.BuildPlan([]string{"prewalk", "zg"})
+	p, err := e.BuildPlan([]string{"prewalk", fixtureID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -601,7 +603,7 @@ func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(agents), "User instructions stay here.") || !strings.Contains(string(agents), "<!-- codex-setup:zg -->") {
+	if !strings.Contains(string(agents), "User instructions stay here.") || !strings.Contains(string(agents), "<!-- codex-setup:"+fixtureID+" -->") {
 		t.Fatalf("zg did not preserve or manage AGENTS.md: %s", agents)
 	}
 	for _, guidance := range []string{"freshness: \"wait_for_fresh\"", "possibly_stale", "timeout", "error", "live file", "continue with `rg`"} {
@@ -635,7 +637,7 @@ func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
 	if err := os.WriteFile(configPath, disabled, 0600); err != nil {
 		t.Fatal(err)
 	}
-	p, err = e.BuildPlan([]string{"zg"})
+	p, err = e.BuildPlan([]string{fixtureID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -658,7 +660,7 @@ func TestPackagedZGIsOptInAndPreserving(t *testing.T) {
 		t.Fatalf("zg reapply changed approvals: %#v", config)
 	}
 
-	p, err = e.BuildPlan([]string{"prewalk", "zg"})
+	p, err = e.BuildPlan([]string{"prewalk", fixtureID})
 	if err != nil || len(p.Changes) != 0 {
 		t.Fatalf("zg install is not idempotent: %v, %v", p, err)
 	}
