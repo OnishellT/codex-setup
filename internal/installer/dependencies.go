@@ -48,7 +48,7 @@ type dependencyRequirement struct {
 const (
 	commandAptGet    = "apt-get"
 	depTmux          = "tmux >= 3.3"
-	depTic           = "tic (ncurses)"
+	depTic           = "tic y terminfo tmux-direct (ncurses)"
 	depNode18        = "node >= 18"
 	depZG            = "zg privado (Node 22 + paquete 0.2.1 + parche Linux)"
 	depPython        = "python3"
@@ -190,6 +190,10 @@ func dependencySatisfied(req dependencyRequirement) bool {
 	path, err := exec.LookPath(req.binary)
 	if err != nil {
 		return false
+	}
+	if req.name == depTic {
+		_, err := run(3*time.Second, "infocmp", "-x", "tmux-direct")
+		return err == nil
 	}
 	if req.version == "" {
 		return true
@@ -377,7 +381,10 @@ func (m packageManagerInfo) requirementPackages(item string) []string {
 		return []string{"tmux"}
 	case depTic:
 		if m.family == "apt" {
-			return []string{"ncurses-bin"}
+			return []string{"ncurses-bin", "ncurses-term"}
+		}
+		if m.family == "dnf" {
+			return []string{"ncurses", "ncurses-term"}
 		}
 		return []string{"ncurses"}
 	case depNode18:

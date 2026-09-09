@@ -12,9 +12,35 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
+
+func TestPanelDependencyRequiresTerminfo(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PATH", dir)
+	if err := os.WriteFile(filepath.Join(dir, "tic"), []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	req := dependencyRequirement{depTic, "tic", ""}
+	if dependencySatisfied(req) {
+		t.Fatal("tic alone accepted without terminfo")
+	}
+	for _, code := range []string{"1", "0"} {
+		if err := os.WriteFile(filepath.Join(dir, "infocmp"), []byte("#!/bin/sh\n[ \"$1\" = -x ] && [ \"$2\" = tmux-direct ] || exit 2\nexit "+code+"\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if dependencySatisfied(req) != (code == "0") {
+			t.Fatalf("infocmp exit %s", code)
+		}
+	}
+	for _, family := range []string{"apt", "dnf"} {
+		if !slices.Contains((packageManagerInfo{family: family}).requirementPackages(depTic), "ncurses-term") {
+			t.Fatalf("%s omits terminfo", family)
+		}
+	}
+}
 
 func TestRTKBinaryAcceptsOnlyRegularEntry(t *testing.T) {
 	var b bytes.Buffer
