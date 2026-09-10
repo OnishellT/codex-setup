@@ -11,8 +11,7 @@ description: >
 
 # Automatic Prewalk
 
-Las instrucciones explícitas del usuario prevalecen cuando entren en conflicto
-con esta política; user instructions take precedence when necessary.
+Explicit user instructions take precedence when they conflict with this policy.
 
 Prewalk is enabled for the primary orchestrator. Apply it automatically to
 nontrivial implementation tasks; the user does not need to request it.

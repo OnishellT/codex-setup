@@ -71,9 +71,9 @@ while dependencies, files, models, or hooks remain pending.
 
 See the [usage guide](docs/usage.en.md) for automation, models,
 destinations, and recovery. Component guides:
-[panel](payload/panel/README.md),
+[panel](docs/en/panel.md),
 [Ponytail](payload/integrations/ponytail/README.md),
-[RTK](payload/integrations/rtk/README.md), and [zg](payload/integrations/zg/README.md).
+[RTK](payload/integrations/rtk/README.md), and [zg](docs/en/zg.md).
 
 ## Development
 

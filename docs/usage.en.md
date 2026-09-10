@@ -102,7 +102,7 @@ Ctrl-S hides/shows the panel. Arrow keys and Enter open an agent; Enter closes
 the floating view. Quota is queried when opening the panel, not during installation.
 To disable this query: `CODEX_PANEL_QUOTA_OFFLINE=1 codex-panel -p personal`.
 Per-agent estimates are not official figures. More options are in the
-[panel guide (Spanish)](../payload/panel/README.md).
+[panel guide](en/panel.md).
 
 ## Prewalk, Ponytail, and handoff
 
@@ -140,7 +140,7 @@ Only `zvec_grep_search` is exposed, with mandatory `freshness: "wait_for_fresh"`
 Use it with a relevant local index for conceptual queries; use `rg` for exact
 searches, missing indexes, or errors. Discard `possibly_stale`, `timeout`, and
 `error` results. Creating indexes requires separate authorization.
-Runtime and patch rollback: [zg guide (Spanish)](../payload/integrations/zg/README.md).
+Runtime and patch rollback: [zg guide](en/zg.md).
 
 ## Verification and limits
 
