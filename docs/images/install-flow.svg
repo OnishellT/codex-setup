@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="254" viewBox="0 0 1120 254" role="img" aria-labelledby="title desc">
+  <title id="title">Instalación con confirmaciones separadas</title>
+  <desc id="desc">Comprobar cuenta, elegir módulos, confirmar dependencias, revisar cambios y verificar. La confianza de hooks requiere intervención manual.</desc>
+  <rect width="1120" height="254" rx="16" fill="#11131d"/>
+  <g font-family="system-ui, sans-serif">
+    <text x="36" y="43" fill="#f4f4fc" font-size="22" font-weight="600">De la selección a la verificación</text>
+    <path d="M130 110H988" stroke="#59627e" stroke-width="2"/>
+    <g fill="#1e2232" stroke="#454d68">
+      <rect x="36" y="76" width="188" height="88" rx="10"/>
+      <rect x="250" y="76" width="188" height="88" rx="10"/>
+      <rect x="464" y="76" width="188" height="88" rx="10"/>
+      <rect x="678" y="76" width="188" height="88" rx="10"/>
+      <rect x="892" y="76" width="192" height="88" rx="10" stroke="#a6e3a1"/>
+    </g>
+    <g fill="#f4f4fc" font-size="17" text-anchor="middle" font-weight="600">
+      <text x="130" y="112">Cuenta</text><text x="344" y="112">Módulos</text>
+      <text x="558" y="112">Dependencias</text><text x="772" y="112">Cambios</text>
+      <text x="988" y="112">Verificación</text>
+    </g>
+    <g fill="#a6adc8" font-size="13" text-anchor="middle">
+      <text x="130" y="140">Comprobar acceso</text><text x="344" y="140">Elegir capacidades</text>
+      <text x="558" y="140">Confirmar instalación</text><text x="772" y="140">Revisar y confirmar</text>
+      <text x="988" y="140">Comprobar pendientes</text>
+    </g>
+    <circle cx="43" cy="211" r="5" fill="#f9e2af"/>
+    <text x="58" y="216" fill="#f9e2af" font-size="15">Hooks: revisa y concede confianza en /hooks. Instalar archivos no concede confianza.</text>
+  </g>
+</svg>
