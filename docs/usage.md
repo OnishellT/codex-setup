@@ -1,6 +1,6 @@
 # Guía de uso
 
-[Volver al README en español](../README.es.md)
+[English](usage.en.md) · Español · [Volver al README en español](../README.es.md)
 
 ## Instalación y automatización
 

@@ -69,7 +69,7 @@ while dependencies, files, models, or hooks remain pending.
 - Never copy authentication or history, trust hooks, or create zg indexes.
 - RTK, Qlty, and the zg runtime use verified, managed installations.
 
-See the [usage guide (Spanish)](docs/usage.md) for automation, models,
+See the [usage guide](docs/usage.en.md) for automation, models,
 destinations, and recovery. Component guides:
 [panel](payload/panel/README.md),
 [Ponytail](payload/integrations/ponytail/README.md),
@@ -91,5 +91,5 @@ make release                  # amd64 and arm64 binaries in bin/
 `internal/` contains the installer and TUI; `payload/`, embedded resources;
 `docs/`, guides and images. Tests stay alongside the code.
 Binaries, caches, and credentials are not tracked.
-See [adding modules](docs/usage.md#añadir-módulos) and
-[provenance and licenses](docs/usage.md#procedencia) (Spanish).
+See [adding modules](docs/usage.en.md#adding-modules) and
+[provenance and licenses](docs/usage.en.md#provenance).
