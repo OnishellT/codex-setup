@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="254" viewBox="0 0 1120 254" role="img" aria-labelledby="title desc">
+  <title id="title">Installation with separate confirmations</title>
+  <desc id="desc">Check account, choose modules, confirm dependencies, review changes, and verify. Hooks require manual trust.</desc>
+  <rect width="1120" height="254" rx="16" fill="#11131d"/>
+  <g font-family="system-ui, sans-serif">
+    <text x="36" y="43" fill="#f4f4fc" font-size="22" font-weight="600">From selection to verification</text>
+    <path d="M130 110H988" stroke="#59627e" stroke-width="2"/>
+    <g fill="#1e2232" stroke="#454d68">
+      <rect x="36" y="76" width="188" height="88" rx="10"/>
+      <rect x="250" y="76" width="188" height="88" rx="10"/>
+      <rect x="464" y="76" width="188" height="88" rx="10"/>
+      <rect x="678" y="76" width="188" height="88" rx="10"/>
+      <rect x="892" y="76" width="192" height="88" rx="10" stroke="#a6e3a1"/>
+    </g>
+    <g fill="#f4f4fc" font-size="17" text-anchor="middle" font-weight="600">
+      <text x="130" y="112">Account</text><text x="344" y="112">Modules</text>
+      <text x="558" y="112">Dependencies</text><text x="772" y="112">Changes</text>
+      <text x="988" y="112">Verification</text>
+    </g>
+    <g fill="#a6adc8" font-size="13" text-anchor="middle">
+      <text x="130" y="140">Check access</text><text x="344" y="140">Choose capabilities</text>
+      <text x="558" y="140">Confirm installation</text><text x="772" y="140">Review and confirm</text>
+      <text x="988" y="140">Check pending items</text>
+    </g>
+    <circle cx="43" cy="211" r="5" fill="#f9e2af"/>
+    <text x="58" y="216" fill="#f9e2af" font-size="15">Hooks: review and grant trust in /hooks. Installing files does not grant trust.</text>
+  </g>
+</svg>

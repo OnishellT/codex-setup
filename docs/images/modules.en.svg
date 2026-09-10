@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="360" viewBox="0 0 1120 360" role="img" aria-labelledby="title desc">
+  <title id="title">Codex Setup: a modular environment</title>
+  <desc id="desc">Configuration: base, profiles, and agents. Workflow: Prewalk, Ponytail, and handoff. Tools: panel, RTK, and optional zg.</desc>
+  <rect width="1120" height="360" rx="20" fill="#11131d"/>
+  <g font-family="system-ui, sans-serif">
+    <text x="44" y="52" fill="#a6e3a1" font-size="13" letter-spacing="3">LOCAL · MODULAR · REVIEWABLE</text>
+    <text x="44" y="103" fill="#f4f4fc" font-size="38" font-weight="700">Your environment. Your choices.</text>
+    <text x="44" y="137" fill="#a6adc8" font-size="17">Choose capabilities without replacing Codex CLI.</text>
+    <g fill="#1e2232" stroke="#343a50">
+      <rect x="44" y="173" width="328" height="142" rx="12"/>
+      <rect x="396" y="173" width="328" height="142" rx="12"/>
+      <rect x="748" y="173" width="328" height="142" rx="12"/>
+    </g>
+    <g font-size="20" font-weight="600">
+      <text x="68" y="212" fill="#89b4fa">01 / Configuration</text>
+      <text x="420" y="212" fill="#cba6f7">02 / Workflow</text>
+      <text x="772" y="212" fill="#a6e3a1">03 / Tools</text>
+    </g>
+    <g fill="#cdd6f4" font-size="17">
+      <text x="68" y="250">Base · Profiles · Agents</text>
+      <text x="420" y="250">Prewalk · Ponytail · Handoff</text>
+      <text x="772" y="250">Panel · RTK · Optional zg</text>
+    </g>
+    <g fill="#a6adc8" font-size="14">
+      <text x="68" y="283">Models validated with your account</text>
+      <text x="420" y="283">Separate implementation and review</text>
+      <text x="772" y="283">Visibility and local search</text>
+    </g>
+  </g>
+</svg>

@@ -1,92 +1,95 @@
 # Codex Setup
 
-Configura tu entorno de Codex desde una terminal: módulos, perfiles, agentes,
-revisión de código y un panel lateral. Elige qué instalar, revisa y confirma.
-Proyecto independiente; no es un producto oficial de OpenAI.
+English · [Español](README.es.md)
 
-![Configuración, flujo de trabajo y herramientas de Codex Setup](docs/images/modules.svg)
+Set up your Codex environment from the terminal: modules, profiles, agents,
+code review, and a sidebar panel. Choose what to install, review, and confirm.
+An independent project, not an official OpenAI product.
 
-## Empieza
+![Codex Setup configuration, workflow, and tools](docs/images/modules.en.svg)
 
-Necesitas **Linux amd64 o arm64**, Codex CLI instalado y una sesión ChatGPT
-iniciada con `codex login`. No incluye Codex ni credenciales. La instalación de
-dependencias admite Ubuntu 24.04+, Debian 12+, Fedora 40+ y Arch Linux.
-macOS y Windows no están soportados.
+## Get started
 
-Descarga tu binario y `SHA256SUMS` desde
+You need **Linux amd64 or arm64**, Codex CLI installed, and a ChatGPT session
+started with `codex login`. Codex and credentials are not included. Dependency
+installation supports Ubuntu 24.04+, Debian 12+, Fedora 40+, and Arch Linux.
+macOS and Windows are not supported.
+
+Download your binary and `SHA256SUMS` from
 [Releases](https://github.com/OnishellT/codex-setup/releases/latest).
-No necesitas Go ni clonar el repositorio: el payload está embebido.
+No Go installation or repository clone is needed: the payload is embedded.
 
 ```sh
-# Para arm64, cambia el nombre del binario.
+# For arm64, use the corresponding binary name.
 sha256sum --ignore-missing -c SHA256SUMS
 chmod +x codex-setup-linux-amd64
 ./codex-setup-linux-amd64
 ```
 
-**↑/↓** navega · **Espacio** selecciona · **m** elige modelos · **Enter** revisa.
-Las dependencias y la configuración se confirman por separado.
-Los paquetes del sistema pueden solicitar `sudo`.
+**↑/↓** navigate · **Space** select · **m** choose models · **Enter** review.
+Dependencies and configuration changes require separate confirmations.
+System packages may require `sudo`. The installer interface is in Spanish.
 
-![Flujo de instalación y verificación, con confianza manual de hooks](docs/images/install-flow.svg)
+![Installation and verification flow, with manual hook trust](docs/images/install-flow.en.svg)
 
-## Qué incluye
+## What's included
 
-| Módulo | Para qué sirve |
+| Module | Purpose |
 | --- | --- |
-| `base` · `profiles` | Configuración compartida y perfiles personal/work. |
-| `agents` · `prewalk` | Delegación nativa, worktrees, Qlty y revisión independiente. |
-| `rtk` | Reduce la salida de comandos mediante un hook. |
-| `ponytail` | Instrucciones y skills para mantener el código simple. |
-| `context-handoff` | Alertas de contexto y traspasos compactos entre tareas. |
-| `panel` | Panel lateral con agentes, logs, tokens y cuota. |
-| `zg` **opcional** | Búsqueda semántica en índices locales; desmarcado por defecto. |
+| `base` · `profiles` | Shared configuration and personal/work profiles. |
+| `agents` · `prewalk` | Native delegation, worktrees, Qlty, and independent review. |
+| `rtk` | Reduces command output through a hook. |
+| `ponytail` | Instructions and skills to keep code simple. |
+| `context-handoff` | Context alerts and compact handoffs between tasks. |
+| `panel` | Sidebar with agents, logs, tokens, and quota. |
+| `zg` **optional** | Semantic search over local indexes; unchecked by default. |
 
-Los modelos se validan contra el catálogo de tu cuenta; puedes cambiarlos antes
-de instalar. Las dependencias entre módulos se resuelven automáticamente.
-Desmarcar un módulo **no lo desinstala**.
+Models are validated against your account's catalog and can be changed before
+installation. Dependencies between modules are resolved automatically.
+Unchecking a module **does not uninstall it**.
 
-## Terminar y comprobar
+## Finish and verify
 
-Reinicia Codex. Si seleccionaste hooks, revísalos y concede confianza mediante
-`/hooks`: el instalador nunca lo hace por ti. Abre una terminal nueva para
-activar el panel en Bash/Zsh.
+Restart Codex. If you selected hooks, review them and grant trust through
+`/hooks`: the installer never does this for you. Open a new terminal to
+activate the panel in Bash/Zsh.
 
 ```sh
-# Usa la misma selección que instalaste. No modifica archivos.
+# Use the same modules you installed. This does not modify files.
 ./codex-setup-linux-amd64 --modules base,profiles,agents,prewalk --check
 ```
 
-«Archivos instalados» no equivale a «listo para usar»: la comprobación devuelve
-un error mientras haya dependencias, archivos, modelos o hooks pendientes.
+“Files installed” does not mean “ready to use”: verification returns an error
+while dependencies, files, models, or hooks remain pending.
 
-## Control local
+## Local control
 
-- Vista previa y respaldos privados antes de sobrescribir archivos.
-- Conserva configuración ajena; el merge TOML puede perder comentarios.
-- No copia autenticación ni historiales, no confía hooks y no crea índices zg.
-- RTK, Qlty y el runtime de zg usan instalaciones gestionadas verificadas.
+- Preview changes and create private backups before overwriting files.
+- Preserve unrelated configuration; TOML merging may remove comments.
+- Never copy authentication or history, trust hooks, or create zg indexes.
+- RTK, Qlty, and the zg runtime use verified, managed installations.
 
-Consulta la [guía de uso](docs/usage.md) para automatización, modelos,
-destinos y recuperación. Guías específicas: [panel](payload/panel/README.md),
+See the [usage guide (Spanish)](docs/usage.md) for automation, models,
+destinations, and recovery. Component guides:
+[panel](payload/panel/README.md),
 [Ponytail](payload/integrations/ponytail/README.md),
-[RTK](payload/integrations/rtk/README.md) y [zg](payload/integrations/zg/README.md).
+[RTK](payload/integrations/rtk/README.md), and [zg](payload/integrations/zg/README.md).
 
-## Desarrollo
+## Development
 
-Go **1.26+**, Python **3.11+** y Make. La suite del panel necesita tmux y ncurses;
-las pruebas de red son opt-in.
+Go **1.26+**, Python **3.11+**, and Make. Panel tests require tmux and ncurses;
+network tests are opt-in.
 
 ```sh
 git clone https://github.com/OnishellT/codex-setup.git
 cd codex-setup
 make test check
-make release                  # binarios amd64 y arm64 en bin/
-./install.sh                  # usa el binario local
+make release                  # amd64 and arm64 binaries in bin/
+./install.sh                  # uses the local binary
 ```
 
-`internal/` contiene instalador y TUI; `payload/`, recursos embebidos;
-`docs/`, guías e imágenes. Las pruebas permanecen junto al código.
-No se versionan binarios, cachés ni credenciales.
-Consulta [cómo añadir módulos](docs/usage.md#añadir-módulos) y la
-[procedencia y licencias](docs/usage.md#procedencia).
+`internal/` contains the installer and TUI; `payload/`, embedded resources;
+`docs/`, guides and images. Tests stay alongside the code.
+Binaries, caches, and credentials are not tracked.
+See [adding modules](docs/usage.md#añadir-módulos) and
+[provenance and licenses](docs/usage.md#procedencia) (Spanish).

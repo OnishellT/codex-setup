@@ -1,6 +1,6 @@
 # Guía de uso
 
-[Volver al README](../README.md)
+[Volver al README en español](../README.es.md)
 
 ## Instalación y automatización
 
